@@ -1,20 +1,21 @@
 program testqhull
+! dummy program to test calling qhull
 use utils
 implicit none
 
-integer :: d=2
-integer :: np=10
+integer(kind=idx_t) :: d=2
+integer(kind=idx_t) :: np=10
+integer(kind=idx_t) :: ierr 
+
+real(kind=real_t),allocatable :: points(:,:)
+
 integer :: i
 
-real(8),allocatable :: points(:,:)
-
-integer :: ierr 
-
-allocate(points(np,2))
+allocate(points(d,np))
 points=0.d0
 do i =1,np
-  points(i,1)=RAND()
-  points(i,2)=RAND()
+  points(1,i)=RAND()
+  points(2,i)=RAND()
 enddo
 
 ierr = triangulate(d,np,points)

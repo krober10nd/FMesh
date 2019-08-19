@@ -1,14 +1,9 @@
+#include <stdio.h>
 #include <qhull_ra.h>
 // This function is designed to be called from fortran 
-//  
-/*-------------------------------------------------
--internal function prototypes
-*/
-int ctriangulate(int DIM, int NUMPOINTS, double *fpoints);//, int *faces);
-
-/*-------------------------------------------------
--call qhull to triangulate point set 
-*/
+// via the wrapper written in utils.F90  
+//*-------------------------------------------------
+//-call qhull to triangulate point set 
 int ctriangulate(int DIM, int NUMPOINTS, double *fpoints) { // int *faces) {
 
    boolT ismalloc= False;    /* True if qhull should free points in qh_freeqhull() or reallocation */
@@ -23,14 +18,10 @@ int ctriangulate(int DIM, int NUMPOINTS, double *fpoints) { // int *faces) {
    facetT *facet;            /* set by FORALLfacets */
    vertexT *vertex, **vertexp; 
 
-   QHULL_LIB_CHECK
-
+    QHULL_LIB_CHECK
   {
     coordT points[DIM*NUMPOINTS]; /* array of coordinates for each point */
-    printf("%f\n",fpoints[i*2]);
-    printf("%f\n",fpoints[i*2+1]);
 
-    return 0;
     // put points in the coordT type.
     // will have to check if this is absolutely necessary
     for ( i=0 ; i < NUMPOINTS; i++) {
