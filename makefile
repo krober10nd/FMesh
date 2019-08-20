@@ -1,5 +1,5 @@
-INCLUDE  := -I/usr/local/include/libqhull_r
-LDFLAGS  := -L/usr/local/lib
+INCLUDE  := -I/Users/Keith/Desktop/include/libqhull_r
+LDFLAGS  := -L/Users/Keith/Desktop/lib
 LDLIBS   := -lqhullstatic_r
 # fortran flags 
 GFLAGS   := -O0 -g -fbacktrace -fbounds-check -cpp -DREAL64

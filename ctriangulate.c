@@ -4,7 +4,7 @@
 // via the wrapper written in utils.F90  
 //*-------------------------------------------------
 //-call qhull to triangulate point set 
-int ctriangulate(int DIM, int NUMPOINTS, double *fpoints) { // int *faces) {
+int ctriangulate(int DIM, int NUMPOINTS, double *fpoints, int *faces) {
 
    boolT ismalloc= False;    /* True if qhull should free points in qh_freeqhull() or reallocation */
    char flags[250];          /* option flags for qhull, see qh-quick.htm */
@@ -41,11 +41,16 @@ int ctriangulate(int DIM, int NUMPOINTS, double *fpoints) { // int *faces) {
     fflush(NULL);
 
     if (!exitcode)
+      // allocate memory for facets 
+      faces = (int*) malloc( sizeof(int)*(DIM+1*facet->num_facets) );
 
+      i=0;
       FORALLfacets { 
           if( !facet->upperdelaunay) {
             FOREACHvertex_(facet->vertices)
-                printf(" %d", qh_pointid (qh, vertex->point) );
+                //printf(" %d", qh_pointid (qh, vertex->point) );
+                faces[i]= qh_pointid (qh, vertex->point);
+                i++;
             printf("\n");
           }
       }

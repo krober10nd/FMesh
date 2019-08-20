@@ -30,27 +30,29 @@ implicit none
 
 interface
 
-function ctriangulate(DIM, NUMPOINTS, fpoints)bind(c,name='ctriangulate')
-import idx_t,real_t
+function ctriangulate(DIM, NUMPOINTS, fpoints, ffacets)bind(c,name='ctriangulate')
+import idx_t,real_t,c_ptr
 implicit none
 integer(kind=idx_t)             :: ctriangulate
 integer(kind=idx_t), value, intent(in) :: DIM
 integer(kind=idx_t), value, intent(in) :: NUMPOINTS 
 real(kind=real_t), intent(in)   :: fpoints(DIM,NUMPOINTS)
+type(c_ptr), intent(out) :: ffacets
 end function ctriangulate
 
 end interface
 
 contains 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-integer function triangulate(DIM, NUMPOINTS, points)
+integer function triangulate(DIM, NUMPOINTS, points, facets)
 implicit none
 integer(kind=idx_t), intent(in) :: DIM
 integer(kind=idx_t), intent(in) :: NUMPOINTS 
 real(kind=real_t),   intent(in) :: points(DIM,NUMPOINTS)
+type(c_ptr),intent(out) :: facets(*)
 integer(kind=idx_t)             :: ierr
 
-ierr = ctriangulate(DIM,NUMPOINTS,points)
+ierr = ctriangulate(DIM,NUMPOINTS,points,facets)
 
 end function triangulate
 
