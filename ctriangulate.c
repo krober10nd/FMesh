@@ -38,7 +38,7 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
     qhT *qh= &qh_qh;
     qh_zero(qh, errfile);
 
-    sprintf(flags, "qhull d i");
+    sprintf(flags, "qhull d Qt i");
 
     fflush(NULL);
     exitcode= qh_new_qhull(qh, DIM, NUMPOINTS, points, ismalloc,
@@ -72,6 +72,7 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
             //printf("\n");
           }
       } 
+    //printf("FINISHED IN C");
 
     qh_freeqhull(qh, !qh_ALL);                 /* free long memory */
     qh_memfreeshort(qh, &curlong, &totlong);  /* free short memory and memory allocator */
