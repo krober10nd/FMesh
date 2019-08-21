@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <qhull_ra.h>
 // This function is designed to be called from fortran 
 // via the wrapper written in utils.F90  
+//
 //*-------------------------------------------------
 //-call qhull to triangulate point set 
-int ctriangulate(int DIM, int NUMPOINTS, double *fpoints, int *faces) {
+int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
 
    boolT ismalloc= False;    /* True if qhull should free points in qh_freeqhull() or reallocation */
    char flags[250];          /* option flags for qhull, see qh-quick.htm */
@@ -13,7 +15,9 @@ int ctriangulate(int DIM, int NUMPOINTS, double *fpoints, int *faces) {
    FILE *errfile= stderr;    /* error messages from qhull code */
    int exitcode;             /* 0 if no error from qhull */
    int curlong, totlong;     /* memory remaining after qh_memfreeshort, used if !qh_NOmem  */
-   int i;
+   int nt=*NF; 
+   int *tmp;
+   int i,j;
 
    facetT *facet;            /* set by FORALLfacets */
    vertexT *vertex, **vertexp; 
@@ -25,15 +29,16 @@ int ctriangulate(int DIM, int NUMPOINTS, double *fpoints, int *faces) {
     // put points in the coordT type.
     // will have to check if this is absolutely necessary
     for ( i=0 ; i < NUMPOINTS; i++) {
-       points[i*2]  =fpoints[i*2];
-       points[i*2+1]=fpoints[i*2+1];
+       for ( j=0 ; j < DIM ; j++) {
+          points[i*DIM + j]  =fpoints[i*DIM + j];
+          }
     }
 
     qhT qh_qh;                     /* Create an instance of Qhull */
     qhT *qh= &qh_qh;
     qh_zero(qh, errfile);
 
-    sprintf(flags, "qhull d Tcv i");
+    sprintf(flags, "qhull d i");
 
     fflush(NULL);
     exitcode= qh_new_qhull(qh, DIM, NUMPOINTS, points, ismalloc,
@@ -41,30 +46,44 @@ int ctriangulate(int DIM, int NUMPOINTS, double *fpoints, int *faces) {
     fflush(NULL);
 
     if (!exitcode)
-      // allocate memory for facets 
-      faces = (int*) malloc( sizeof(int)*(DIM+1*facet->num_facets) );
-
       i=0;
+      // we only need the lower hull facets (Delaunay ones)
       FORALLfacets { 
           if( !facet->upperdelaunay) {
-            FOREACHvertex_(facet->vertices)
-                //printf(" %d", qh_pointid (qh, vertex->point) );
-                faces[i]= qh_pointid (qh, vertex->point);
+            FOREACHvertex_(facet->vertices) {
                 i++;
-            printf("\n");
+                }
           }
-      }
+      } 
+
+      // allocate memory for the lower facets 
+      *NF = i/(DIM+1); 
+      tmp = (int*) malloc( sizeof(int)*(DIM+1)*(*NF) );
+
+      i=0;
+      // we only need the lower hull facets (Delaunay ones)
+      FORALLfacets { 
+          if( !facet->upperdelaunay) {
+            FOREACHvertex_(facet->vertices) {
+                //printf(" %d", qh_pointid (qh, vertex->point) );
+                tmp[i]= qh_pointid (qh, vertex->point);
+                i++;
+                }
+            //printf("\n");
+          }
+      } 
 
     qh_freeqhull(qh, !qh_ALL);                 /* free long memory */
     qh_memfreeshort(qh, &curlong, &totlong);  /* free short memory and memory allocator */
     if (curlong || totlong)
         fprintf(errfile, "qhull internal warnin: did not free %d bytes of long memory (%d pieces)\n", totlong, curlong);
-    /* Exiting the block frees qh_qh */
   }
-
-    
-return exitcode;
+// return facet table     
+return tmp;
 
 }
 
-
+void destroy_storage(int *ptr)
+{
+   free(ptr);
+}

@@ -1,10 +1,10 @@
-INCLUDE  := -I/Users/Keith/Desktop/include/libqhull_r
-LDFLAGS  := -L/Users/Keith/Desktop/lib
+INCLUDE  := -I/usr/local/include/libqhull_r
+LDFLAGS  := -L/usr/local/lib
 LDLIBS   := -lqhullstatic_r
 # fortran flags 
-GFLAGS   := -O0 -g -fbacktrace -fbounds-check -cpp -DREAL64
+GFLAGS   := -O2 -g -DREAL64 
 # c flags
-CFLAGS   := -O0 -g
+CFLAGS   := -O2 -g
 
 testqhull.x: ctriangulate.o utils.o driver.o
 	gfortran -o testqhull.x ctriangulate.o utils.o driver.o $(LDFLAGS) $(LDLIBS) $(INCLUDE) $(CFLAGS)  
