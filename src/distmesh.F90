@@ -11,12 +11,12 @@ INTEGER(idx_t) :: i
 
 !! SPECIFY PROBELM SPECIFIC PARAMETERS HERE
 DIM = 2
-LMIN=0.250d0
+LMIN=0.25d0
 
 BBOX(1) = -1.d0 
-BBOX(2) = +1.d0 
+BBOX(2) = 1.d0 
 BBOX(3) = -1.d0 
-BBOX(4) = +1.d0
+BBOX(4) = 1.d0
 !!
 
 CALL FormInitialPoints2D(DIM,BBOX,LMIN,POINTS,NP)

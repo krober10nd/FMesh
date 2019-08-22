@@ -1,8 +1,8 @@
-INCLUDE  := -I/usr/local/include/libqhull_r
-LDFLAGS  := -L/usr/local/lib
+INCLUDE  := -I../include/libqhull_r
+LDFLAGS  := -L../lib
 LDLIBS   := -lqhullstatic_r
 # fortran flags 
-GFLAGS   := -O2 -g -DREAL64 
+GFLAGS   := -O0 -fbacktrace -g -DREAL64 
 # c flags
 CFLAGS   := -O2 -g
 

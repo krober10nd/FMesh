@@ -1,7 +1,7 @@
 module utils
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! PROCEDURES FOR FortranMesh
+! PROCEDURES FOR FMesh
 ! AUTHOR: Keith Jared Roberts, V1.0 August/19/2019
 !         Universidade de São Paulo, Brasil 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -110,10 +110,6 @@ REAL(real_t) :: temp,junk
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER  :: i,j,k
 
-EPS=EPSILON(1.0d0) ! machine precision on your computer 
-GEPS=0.001d0*LMIN 
-DEPS=SQRT(EPS)*LMIN 
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 1. Create initial distribution in bounding box (equilateral triangles)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -121,29 +117,9 @@ DEPS=SQRT(EPS)*LMIN
 ! x(2:2:end,:)=x(2:2:end,:)+h0/2;                      % Shift even rows
 ! p=[x(:),y(:)];                                       % List of node coordinates
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 temp=LMIN*(sqrt(3.0d0)/2.0d0)
-
-nx=0
-junk = bbox(1) ! x minimum 
-DO
-  if(junk.GT.BBOX(3)) exit
-   nx = nx + 1 
-   junk = junk + LMIN ! next grid point    
-ENDDO 
-print *, NX 
-ny=0
-junk = bbox(3) ! y minimum 
-DO
-  if(junk.GT.BBOX(4)) continue
-   ny = ny + 1 
-   junk = junk + temp ! next grid point 
-ENDDO 
-
-
-ALLOCATE(XG(NY,NX),YG(NY,NX))
-XG = -99999.d0
-YG = -99999.d0
+NX=FLOOR((BBOX(2) - BBOX(1))/LMIN)+1
+NY=FLOOR((BBOX(4) - BBOX(3))/temp)+1
 
 ALLOCATE(XVEC(NX),YVEC(NY))
 
@@ -157,16 +133,11 @@ ENDDO
 DO J = 1,NY
   YVEC(J) = temp*(J-1) + BBOX(3)! plus y minimum 
 ENDDO
-print *, XVEC(NX)
-print *, YVEC(NY) 
 
-! now repmat xvec and yvec
-DO I = 1,NY
-  DO J = 1,NX
-    XG(I,J) = XVEC(J)
-    YG(I,J) = YVEC(I)
-  ENDDO
-ENDDO
+ALLOCATE(XG(NY,NX))
+ALLOCATE(YG(NY,NX))
+
+CALL MeshGrid2D(XVEC,YVEC,XG,YG) 
 
 !! SHIFT X-COORD TO FORM EQUILATERAL TRIAS
 DO I = 2,NY,2
@@ -177,8 +148,8 @@ ENDDO
 
 ! SAVE ALL INITIAL POINTS 
 NP = 0 
-DO I = 1,NX
-  DO J = 1,NY 
+DO I = 1,NY
+  DO J = 1,NX 
     NP = NP + 1
     IPTS(1,NP) = XG(i,j)
     IPTS(2,NP) = YG(i,j) 
@@ -196,11 +167,29 @@ ENDDO
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);                % Rejection method.
 ! N=size(p,1);                                         % Number of initial points.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CALL CalculateSignedDistance() 
+! Keep points with dist < geps 
+
+! Calculate R0 by evaluating sizing function 
+
+! Apply rejection method 
 
 
 end subroutine FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+SUBROUTINE CalculateSignedDistance()
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Given a Planar straight line graph and a set of points, determine the nearest 
+! Euclidean distance to the boundary using a KD-tree and sign the distance 
+! negative if the point in question is inside the polygon defined by the PSLG. 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+END SUBROUTINE CalculateSignedDistance
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE Triangulate(DIM, NP, POINTS, NF, FACETS,IERR)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -251,6 +240,20 @@ CALL destroy_storage(cfacetemp)
 ierr = 0 !! SUCCESS 
 
 end subroutine Triangulate
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+subroutine meshgrid2D(xgv, ygv, X, Y)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  implicit none
+  real(kind=real_t),intent(in)   :: xgv(:), ygv(:)
+  real(kind=real_t),intent(out)  :: X(:,:), Y(:,:)
+  integer           :: sX, sY
+
+  X(:,:) = spread( xgv, 1, size(ygv) )
+  Y(:,:) = spread( ygv, 2, size(xgv) )
+
+end subroutine
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 end module utils
