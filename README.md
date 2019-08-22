@@ -1,6 +1,8 @@
 # FMesh
-A distance-based mesh generator (based on the DistMesh algorithm) in modern Fortran (NOTE: this is a work in progress!).
+A 2D/3D, an-/isotropic triangular/tetrahedral mesh generator based on the DistMesh algorithm in modern Fortran 
 =======================================
+(NOTE: this is a work in progress!).
+
 The software will need: 
 ---------------------------------------
 1. GNU compiler (e.g., gfortran and gcc)
