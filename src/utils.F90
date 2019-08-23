@@ -1,5 +1,6 @@
 module utils
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! PROCEDURES FOR FMesh
 ! AUTHOR: Keith Jared Roberts, V1.0 August/19/2019
@@ -27,6 +28,7 @@ real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 
+
 INTEGER(idx_t) :: DIM
 REAL(real_t)   :: LMIN
 REAL(real_t)   :: BBOX(4) 
@@ -39,6 +41,16 @@ REAL(kind=real_t),PARAMETER :: DELTAT=0.2d0
 REAL(kind=real_t) :: GEPS 
 REAL(kind=real_t) :: DEPS 
 REAL(kind=real_t) :: EPS 
+
+
+! 2D domain boundary description 
+TYPE BounDescrip
+   INTEGER(kind=idx_t) :: NumVert
+   INTEGER(kind=idx_t) :: DIM
+   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)
+ENDTYPE
+
+TYPE(BounDescrip) :: PSLG 
 
 ! error conditions 
 integer(kind=idx_t) :: ierr 
@@ -84,8 +96,50 @@ end interface
 
 contains 
 
+subroutine ReadPSLGtxt(PSLG) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Read in PSLG from a text file named into derived type BounDescrip
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
 
-subroutine formInitialPoints2D(DIM, BBOX, LMIN,IPTS,NP)
+! INPUTS 
+
+! OUTPUTS
+TYPE(BounDescrip),INTENT(OUT) :: PSLG 
+
+! LOCAL TO SUBROUTINE 
+logical :: fileFound 
+integer :: tempNP,tempDIM
+integer :: i 
+
+INQUIRE(FILE='PSLG.txt',EXIST=fileFound)
+
+IF(fileFound) THEN
+  OPEN(UNIT=1,FILE='PSLG.txt',ACTION='READ')
+  READ(1,*) tempNP,tempDIM ! number of points in file  
+  WRITE(*,'(A)') "********************************************************"
+  WRITE(*,'(A,I5,A,I5,A)') "INFO: Reading PSLG file called PSLG.txt with " &  
+      //" ",tempNP," points in ",tempDIM," dimensions."
+  WRITE(*,'(A)') "********************************************************"
+
+  ALLOCATE(PSLG%Vert(tempDIM,tempNP))
+  PSLG%NumVert = tempNP 
+  PSLG%dim = tempDIM 
+  DO I = 1,PSLG%NumVert
+    READ(1,*) PSLG%Vert(1,I),PSLG%Vert(2,I)
+  ENDDO
+  CLOSE(1)
+  WRITE(*,'(A)') "INFO: Read PSLG file succesfully!"
+ELSE
+  WRITE(*,'(A)') "FATAL: PSLG.txt file not found"
+  STOP  
+ENDIF
+end subroutine ReadPSLGtxt 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+subroutine formInitialPoints2D(DIM, PSLG, LMIN,IPTS,NP)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Form initial points to populate in the domain according to mesh size function
@@ -95,8 +149,8 @@ implicit none
 
 ! INPUTS arguments that will be passed later on when this becomes a subroutine 
 INTEGER(idx_t),INTENT(IN) :: DIM
+TYPE(BounDescrip),INTENT(IN) :: PSLG 
 REAL(real_t),INTENT(IN) :: LMIN       
-REAL(real_t),INTENT(IN) :: BBOX(*)   
 
 ! OUTPUTS 
 REAL(real_t),INTENT(OUT),ALLOCATABLE :: IPTS(:,:)
@@ -108,7 +162,7 @@ REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
 REAL(real_t) :: temp,junk
 INTEGER(idx_t)           :: nx,ny,nz
-INTEGER  :: i,j,k
+INTEGER(idx_t)  :: i,j,k
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 1. Create initial distribution in bounding box (equilateral triangles)
@@ -117,9 +171,21 @@ INTEGER  :: i,j,k
 ! x(2:2:end,:)=x(2:2:end,:)+h0/2;                      % Shift even rows
 ! p=[x(:),y(:)];                                       % List of node coordinates
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+BBOX(1) = MINVAL(PSLG%Vert(1,:))
+BBOX(2) = MAXVAL(PSLG%Vert(1,:))
+BBOX(3) = MINVAL(PSLG%Vert(2,:))
+BBOX(4) = MAXVAL(PSLG%Vert(2,:))
+
 temp=LMIN*(sqrt(3.0d0)/2.0d0)
 NX=FLOOR((BBOX(2) - BBOX(1))/LMIN)+1
 NY=FLOOR((BBOX(4) - BBOX(3))/temp)+1
+
+WRITE(*,'(A)') "********************************************************"
+WRITE(*,'(A,F6.3,A,F6.3,A,F6.3,A,F6.3)') "INFO: Domain extents are: " &  
+       //" XMIN: ",BBOX(1)," XMAX: ",BBOX(2), " " & 
+       //" YMIN: ",BBOX(3)," YMAX: ",BBOX(4) 
+WRITE(*,'(A)') "********************************************************"
 
 ALLOCATE(XVEC(NX),YVEC(NY))
 
@@ -167,7 +233,7 @@ ENDDO
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);                % Rejection method.
 ! N=size(p,1);                                         % Number of initial points.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-CALL CalculateSignedDistance() 
+CALL CalculateSignedDistance(PSLG) 
 ! Keep points with dist < geps 
 
 ! Calculate R0 by evaluating sizing function 
@@ -178,7 +244,8 @@ CALL CalculateSignedDistance()
 end subroutine FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE CalculateSignedDistance()
+SUBROUTINE CalculateSignedDistance(PSLG)
+implicit none 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Given a Planar straight line graph and a set of points, determine the nearest 
@@ -186,7 +253,7 @@ SUBROUTINE CalculateSignedDistance()
 ! negative if the point in question is inside the polygon defined by the PSLG. 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+TYPE(BounDescrip),INTENT(IN) :: PSLG 
 
 END SUBROUTINE CalculateSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
