@@ -11,7 +11,7 @@ The software will need:
 ---------------------------------------
 1. GNU compiler (e.g., gfortran and gcc)
 2. Qhull (static re-entrant libraries)
-3. Python3+ (for visualization of mesh)
+3. Python3+ (for visualization of mesh and for development of mesh size functions)
 
 To install the software:
 ---------------------------------------
