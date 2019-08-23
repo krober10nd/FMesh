@@ -1,7 +1,10 @@
 # FMesh
 A 2D/3D, an-/isotropic triangular/tetrahedral mesh generator based on the DistMesh algorithm in modern Fortran 
-=======================================
+
+
 (NOTE: this is a work in progress!).
+=======================================
+
 
 The software will need: 
 ---------------------------------------
@@ -16,4 +19,16 @@ To install the software:
 3. In make.inc, change the type of build configuration (i.e., dbg, optimised, etc.) 
 4. Run make and the generated binary should be installed in work/bin.
 
+To use the software:
+---------------------------------------
+It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boundary of the domain. 
+% The PSLG is a text file called "PSLG.txt" in the working directory in the following format: 
 
+5  2      ! # of points and dimension 
+-1.0  1.0 ! x and y coordinates of each point
+ 1.0  1.0
+ 1.0 -1.0
+-1.0 -1.0 
+-1.0  1.0 
+
+It requires a text file that describes the mesh sizes in the domain (working on this). 
