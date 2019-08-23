@@ -7,30 +7,20 @@ PROGRAM DistMesh
 USE utils 
 IMPLICIT NONE
 
-INTEGER(idx_t) :: i
-
 !! SPECIFY PROBELM SPECIFIC PARAMETERS HERE
 DIM = 2
-LMIN=0.25
+LMIN=0.25d0
 !! 
 
-CALL ReadPSLGtxt(PSLG)
+! READ IN GEOMETRY 
+CALL ReadPSLGtxt(PSLG,LMIN)
 
-CALL FormInitialPoints2D(DIM,PSLG,LMIN,POINTS,NP)
+! STEP 1: Create initial triangulation to iterate on
+CALL FormInitialTria2D(DIM,PSLG,LMIN,POINTS,NP,TRIAS,NF)
 
-OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
-DO i=1,NP
-  WRITE(300,"(2F12.8)")POINTS(1,i),POINTS(2,i)
-ENDDO
-CLOSE(300)
+! STEP 2: Incrementally move points and retriangulate based 
+! on "spring dynamics"
 
-CALL Triangulate(DIM,NP,POINTS,NF,TRIAS,IERR)
-
-OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
-DO i=1,NF
-  WRITE(301,"(3I8)")TRIAS(1,i),TRIAS(2,i),TRIAS(3,i)
-ENDDO
-CLOSE(301)
 
 
 
