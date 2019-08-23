@@ -347,12 +347,14 @@ end subroutine FormInitialTria2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE CalculateSignedDistance(IPTS,PSLG,SignedDistance)
+use kdtree2_module
 implicit none 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Given a PSLG and a set of points, determine the nearest 
 ! Euclidean distance to the PSLG using a KD-tree and sign the distance 
 ! negative if the point in question is inside the polygon defined by the PSLG. 
+! and vice-versa otherwise.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -361,16 +363,30 @@ TYPE(BounDescrip2D),INTENT(IN) :: PSLG
 REAL(real_t),INTENT(IN),ALLOCATABLE :: IPTS(:,:)
 
 ! OUTPUTS 
-REAL(real_t),INTENT(OUT),ALLOCATABLE :: SignedDistance(:,:)
+REAL(real_t),INTENT(OUT),ALLOCATABLE :: SignedDistance(:)
 
+TYPE(kdtree2), POINTER :: TREE=>null()
+TYPE(kdtree2_result), ALLOCATABLE :: KDRESULTS(:)
+INTEGER(kind=idx_t)=tempSZ
 
 ! BUILD KD-TREE with PSLG vertices
+tree => kdtree2_create(PSLG%Vert,rearrange=.true.,sort=.true.)
 
+! Loop over all the initial points 
+tempSZ = SIZE(IPTS,2) 
+ALLOCATE(SignedDistance(tempSZ)
 
+DO I =1,tempSZ
+  call kdtree2_n_nearest(tp=tree,qv=IPTS(:,I),nn=1,
+                               results=KDRESULTS)
 
+  SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
 
+  ! Determine if point is in the PSLG defined polygon
+ENDDO
 
-
+call kdtree2_destroy(tp=tree)
+DEALLOCATE(KDRESULTS)
 
 END SUBROUTINE CalculateSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!

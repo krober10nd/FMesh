@@ -35,7 +35,7 @@ PROG_NAME = distmesh
 # Colon-separated list of directories containing source files.
 # Can be relative to the working directory.  Use . or $(PWD) to indicate the
 # working directory.
-VPATH = ./../src
+VPATH = ./../src ./../thirdparty
 
 # Name of source file (if any) containing the entry-point to the program (e.g.
 # main function in C or C++ or the file containing the program procedure in
@@ -45,7 +45,7 @@ MAIN = distmesh.F90
 
 # Name of source files (if any) which must be recompiled if any other source
 # files need to be recompiled.
-FORCE_REBUILD_FILES =  ./../src/ctriangulate.c ./../src/utils.F90 ./../src/distmesh.F90
+FORCE_REBUILD_FILES =  ./../thirdparty/kdtree2.f90 ./../src/ctriangulate.c ./../src/utils.F90 ./../src/distmesh.F90 
 
 # Allow files to be compiled into a program (MODE = program), or into a library
 # (MODE = library) or both (MODE = all).
