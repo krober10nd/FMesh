@@ -1,4 +1,4 @@
-module utils
+MODULE UTILS 
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -55,6 +55,30 @@ integer(kind=idx_t) :: ierr
 
 INTERFACE
 
+FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! CALLS PNPOLY TO DETERMINE IF POINT IS IN A 2D multiply-connected POLYGON
+! C CODE IS IN CFUNCTIONS.c
+! https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+import idx_t,real_t,c_ptr
+
+implicit none
+
+integer(kind=idx_t) :: pnpoly 
+
+integer(kind=idx_t), value, intent(in) :: NUMVERT
+real(kind=real_t),   value, intent(in) :: TESTx
+real(kind=real_t),   value, intent(in) :: TESTy
+real(kind=real_t),intent(in)           :: VERTx(NUMVERT)
+real(kind=real_t),intent(in)           :: VERTy(NUMVERT)
+
+
+END FUNCTION pnpoly
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
 FUNCTION faces(DIM, NUMPOINTS, fpoints, NUMFACETS)bind(c,name='faces')
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -71,9 +95,8 @@ integer(kind=idx_t), value, intent(in) :: NUMPOINTS
 integer(kind=idx_t), intent(inout)     :: NUMFACETS
 real(kind=real_t), intent(in)          :: fpoints(DIM,NUMPOINTS)
 
-END FUNCTION 
+END FUNCTION faces
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 
 SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -90,9 +113,14 @@ SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
 END SUBROUTINE destroy_storage
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+
 END INTERFACE
 
+
+
 CONTAINS 
+
+
 
 SUBROUTINE ReadPSLGtxt(PSLG,LMIN) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -208,14 +236,15 @@ temp(2,nout)=PSLG%Vert(2,ny)
 temp(1,nout)=PSLG%Vert(1,nx)
 
 ! debug 
-!OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
-!do i = 1,nout 
-!  WRITE(303,"(2F12.8)")temp(1,i),temp(2,i)
-!ENDDO
-!CLOSE(303)
+OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
+do i = 1,nout 
+  WRITE(303,"(2F12.8)")temp(1,i),temp(2,i)
+ENDDO
+CLOSE(303)
 DEALLOCATE(PSLG%Vert)
 ALLOCATE(PSLG%Vert(PSLG%DIM,NOUT))
 PSLG%Vert = temp 
+PSLG%NumVert = NOUT
 DEALLOCATE(temp)
 
 end subroutine densify 
@@ -229,7 +258,7 @@ subroutine formInitialTria2D(DIM,PSLG,LMIN,IPTS,NP,TRIAS,NF)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
 
-! INPUTS arguments that will be passed later on when this becomes a subroutine 
+! INPUTS 
 INTEGER(idx_t),INTENT(IN)      :: DIM
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 REAL(real_t),INTENT(IN)        :: LMIN       
@@ -244,7 +273,7 @@ INTEGER(kind=idx_t), INTENT(INOUT):: NF
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
-REAL(real_t),ALLOCATABLE :: Dist(:,:)
+REAL(real_t),ALLOCATABLE :: Dist(:)
 REAL(real_t)             :: temp,junk
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
@@ -326,7 +355,7 @@ CALL CalculateSignedDistance(IPTS,PSLG,Dist)
 ! Apply rejection method 
 
 
-CALL Triangulate(DIM,NP,POINTS,NF,TRIAS,IERR)
+CALL DelTriangulate(DIM,NP,POINTS,NF,TRIAS,IERR)
 
 
 ! DEBUG VISUALIZE INITIAL TRIANGULATION 
@@ -342,13 +371,10 @@ DO i=1,NF
 ENDDO
 CLOSE(301)
 
-
-end subroutine FormInitialTria2D
+END SUBROUTINE FormInitialTria2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE CalculateSignedDistance(IPTS,PSLG,SignedDistance)
-use kdtree2_module
-implicit none 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Given a PSLG and a set of points, determine the nearest 
@@ -357,6 +383,8 @@ implicit none
 ! and vice-versa otherwise.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use kdtree2_module
+implicit none 
 
 ! INPUTS 
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
@@ -365,33 +393,82 @@ REAL(real_t),INTENT(IN),ALLOCATABLE :: IPTS(:,:)
 ! OUTPUTS 
 REAL(real_t),INTENT(OUT),ALLOCATABLE :: SignedDistance(:)
 
+! LOCAL 
 TYPE(kdtree2), POINTER :: TREE=>null()
 TYPE(kdtree2_result), ALLOCATABLE :: KDRESULTS(:)
-INTEGER(kind=idx_t)=tempSZ
+INTEGER(kind=idx_t) :: tempSZ
+INTEGER(kind=idx_t) :: INoOUT 
+INTEGER(kind=idx_t) :: I
 
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(PSLG%Vert,rearrange=.true.,sort=.true.)
 
 ! Loop over all the initial points 
 tempSZ = SIZE(IPTS,2) 
-ALLOCATE(SignedDistance(tempSZ)
+ALLOCATE(SignedDistance(tempSZ))
 
+ALLOCATE(KDRESULTS(1))
+
+INoOUT = -999
 DO I =1,tempSZ
-  call kdtree2_n_nearest(tp=tree,qv=IPTS(:,I),nn=1,
+  call kdtree2_n_nearest(tp=tree,qv=IPTS(:,I),nn=1, & 
                                results=KDRESULTS)
 
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
+  !print *, I
+  !print *, PSLG%Vert(1,I), PSLG%Vert(2,I) 
+  !print *, IPTS(1,I),IPTS(2,I)
+  !print *, "****************************"
 
   ! Determine if point is in the PSLG defined polygon
+  CALL FPNPOLY(PSLG,IPTS(:,I),INoOUT)
+  
+  IF(INoOUT.EQ.1) THEN 
+    SignedDistance(I)= -SignedDistance(I)
+  ENDIF
+
 ENDDO
 
 call kdtree2_destroy(tp=tree)
+
 DEALLOCATE(KDRESULTS)
+
+print *, tempSZ
+! DEBUG VISUALIZE INITIAL TRIANGULATION 
+OPEN(UNIT=305,FILE="SignedDistance.txt",ACTION='WRITE')
+DO i=1,tempSZ
+  WRITE(305,"(F12.8)") SignedDistance(I)
+ENDDO
+CLOSE(305)
 
 END SUBROUTINE CalculateSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE Triangulate(DIM, NP, POINTS, NF, FACETS,IERR)
+SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! fortran subroutine to call inpoly PNPOLY written in cfunctions.c
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+use iso_c_binding, only : c_f_pointer,C_PTR
+implicit none 
+
+! INPUTS
+TYPE(BounDescrip2D), INTENT(IN) :: PSLG 
+REAL(kind=real_t), INTENT(IN) :: TEST(2)
+
+! OUTPUTS 
+INTEGER(kind=idx_t),INTENT(OUT) :: INoOUT 
+
+!FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
+INoOUT = pnpoly(PSLG%NumVert, PSLG%Vert(1,:), PSLG%Vert(2,:), &
+                TEST(1),TEST(2))
+
+END SUBROUTINE 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
+SUBROUTINE DelTriangulate(DIM, NP, POINTS, NF, FACETS,IERR)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! calls qhull library from fortran language to output facet table of delaunay triangulation 
@@ -439,24 +516,33 @@ CALL destroy_storage(cfacetemp)
 ! TODO: BETTER ERROR CHECKING (SEE ZOLTAN ERROR LEVELS FOR REFERENCE?)
 ierr = 0 !! SUCCESS 
 
-end subroutine Triangulate
+END SUBROUTINE DelTriangulate
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-subroutine meshgrid2D(xgv, ygv, X, Y)
+SUBROUTINE meshgrid2D(xgv, ygv, X, Y)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Create a struture grid of points using the vectors xgv and ygv
+! this mimics what the MATLAB command does 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   implicit none
+  ! INPUTS 
   real(kind=real_t),intent(in)   :: xgv(:), ygv(:)
+  ! OUTPUTS
   real(kind=real_t),intent(out)  :: X(:,:), Y(:,:)
-  integer           :: sX, sY
 
   X(:,:) = spread( xgv, 1, size(ygv) )
   Y(:,:) = spread( ygv, 2, size(xgv) )
 
-end subroutine
+END SUBROUTINE
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-function linspace(a, b, n) result(s)
+FUNCTION linspace(a, b, n) result(s)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Creates a vector s that spans the interval (a,b) with n points. 
+! this mimics what the MATLAB command does 
 ! REFERENCE: https://github.com/certik/fortran-utils
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -468,10 +554,10 @@ integer(kind=idx_t), intent(in) :: n
 real(kind=real_t) :: s(n)
 
 s = meshexp(a, b, 1.0d0, n-1)
-end function
+END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-function meshexp(rmin, rmax, a, N) result(mesh)
+FUNCTION meshexp(rmin, rmax, a, N) result(mesh)
 ! REFERENCE: https://github.com/certik/fortran-utils
 ! Generates exponential mesh of N elements on [rmin, rmax]
 !
@@ -528,7 +614,7 @@ else
         WRITE(*,'(A)') "meshexp: N >= 1 required"
     end if
 end if
-end function
+END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-end module utils
+END MODULE UTILS
