@@ -235,17 +235,18 @@ enddo
 temp(2,nout)=PSLG%Vert(2,ny)
 temp(1,nout)=PSLG%Vert(1,nx)
 
-! debug 
-OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
-do i = 1,nout 
-  WRITE(303,"(2F12.8)")temp(1,i),temp(2,i)
-ENDDO
-CLOSE(303)
-DEALLOCATE(PSLG%Vert)
-ALLOCATE(PSLG%Vert(PSLG%DIM,NOUT))
-PSLG%Vert = temp 
-PSLG%NumVert = NOUT
-DEALLOCATE(temp)
+! NEED TO TEST MULTIPLY CONNECTED POLYGONS
+!! debug 
+!OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
+!do i = 1,nout 
+!  WRITE(303,"(2F12.8)")temp(1,i),temp(2,i)
+!ENDDO
+!CLOSE(303)
+!DEALLOCATE(PSLG%Vert)
+!ALLOCATE(PSLG%Vert(PSLG%DIM,NOUT))
+!PSLG%Vert = temp 
+!PSLG%NumVert = NOUT
+!DEALLOCATE(temp)
 
 end subroutine densify 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -365,14 +366,12 @@ CALL PushZerosToBack(IPTS,NP)
 ALLOCATE(r0(NP)) 
 DO I = 1,NP
   CALL LeftRightMeshSizes(IPTS(:,I),H)
-  r0(i)  = 1.0d0/(H**2)
+  r0(i)  = 1.0d0/(H**2.0d0)
 ENDDO
-
-! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 a = maxval(r0) 
 DO I = 1,NP 
   b = r0(i)/a
-  if(rand().lt.b) then
+  if(rand().gt.b) then
     ipts(1,i) = -9999.d0 
     ipts(2,i) = -9999.d0
   endif
@@ -397,7 +396,7 @@ implicit none
 real(kind=real_t),intent(in) :: points(2)
 !OUTPUTS 
 real(kind=real_t),intent(out) :: H 
-H = (1-points(1)) + 0.05  
+H = (1.0d0-points(1))*0.15d0 + 0.05d0
 
 END SUBROUTINE
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -581,6 +580,7 @@ ierr = 0 !! SUCCESS
 
 END SUBROUTINE DelTriangulate
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
 
 SUBROUTINE meshgrid2D(xgv, ygv, X, Y)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
