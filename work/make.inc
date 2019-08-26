@@ -30,7 +30,7 @@ CPPFLAGS = -I../include/libqhull_r
 # compiler
 FC = gfortran
 # compiler flags
-FFLAGS = -O0 -fbacktrace -DREAL64
+FFLAGS = -O0
 # flag to specify directory to put compiled .mod files (e.g. -module for ifort, -J for gfortran)
 F90_MOD_FLAG = -J
 

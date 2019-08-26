@@ -102,13 +102,8 @@ void destroy_storage(int *ptr)
 // This function is the pnpoly algorithm 
 int pnpoly(int nvert, double *vertx, double *verty, double testx, double testy)
 {
-  
   int i, j, c = 0;
   for (i = 0, j = nvert-1; i < nvert; j = i++) {
-     //printf(" %d\n",i);
-     //printf(" %lf %lf\n",vertx[i], verty[j]);
-     //printf(" %lf %lf\n ",testx,testy);
-
     if ( ((verty[i]>testy) != (verty[j]>testy)) &&
 	 (testx < (vertx[j]-vertx[i]) * (testy-verty[i]) / (verty[j]-verty[i]) + vertx[i]) )
        c = !c;

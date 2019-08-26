@@ -250,10 +250,11 @@ DEALLOCATE(temp)
 end subroutine densify 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-subroutine formInitialTria2D(DIM,PSLG,LMIN,IPTS,NP,TRIAS,NF)
+subroutine FormInitialPoints2D(DIM,PSLG,LMIN,IPTS,NP)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Form initial Delaunay triangulation to fill in the domain according to mesh size function
+! Form initial points to fill in the domain according to mesh size function
+! This corresponds with steps 1 to 2 of the distmesh algorithm. 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
@@ -265,18 +266,20 @@ REAL(real_t),INTENT(IN)        :: LMIN
 
 ! OUTPUTS 
 REAL(real_t),INTENT(OUT),ALLOCATABLE :: IPTS(:,:)
-INTEGER(kind=idx_t),INTENT(OUT),ALLOCATABLE:: TRIAS(:,:)
 INTEGER(idx_t),INTENT(OUT) :: NP 
-INTEGER(kind=idx_t), INTENT(INOUT):: NF
 
 ! local to subroutine 
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
 REAL(real_t),ALLOCATABLE :: Dist(:)
+REAL(real_t),ALLOCATABLE :: R0(:)
+REAL(real_t)             :: H
+REAL(real_t)             :: a,b,c
 REAL(real_t)             :: temp,junk
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
+LOGICAL,ALLOCATABLE      :: keep(:)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 1. Create initial distribution in bounding box (equilateral triangles)
@@ -336,10 +339,6 @@ DO I = 1,NY
 ENDDO
 
 ! 2. Remove points outside the region, apply the rejection method
-! THIS STEP REQUIRES 
-! 1. A LINEAR INTERPOLANT TO DETERMINE THE PROBABILITY OF RETAINING THE POINT 
-! 2. A FUNCTION TO GENERATE A "RANDOM" NUMBER
-! 3. A WAY TO DETERMINE IF A POINT IS IN A POLYGON 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! p=p(feval(fd,p,varargin{:})<geps,:);                 % Keep only d<0 points.
 ! r0=1./feval(fh,p,varargin{:}).^2;                    % Probability to keep point.
@@ -348,30 +347,99 @@ ENDDO
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 CALL CalculateSignedDistance(IPTS,PSLG,Dist) 
 
-! Keep points with dist < geps 
+GEPS = 0.01d0 * LMIN  ! this is how it was in DistMesh
 
-! Calculate R0 by evaluating sizing function 
+! Remove points with dist > geps (mark them)
+DO I = 1,NP
+  IF(Dist(I).GT.GEPS) THEN 
+    IPTS(1,I) = -9999.d0
+    IPTS(2,I) = -9999.d0
+  ENDIF
+ENDDO
+! push them to the back of the array
+CALL PushZerosToBack(IPTS,NP)
 
 ! Apply rejection method 
-
-
-CALL DelTriangulate(DIM,NP,POINTS,NF,TRIAS,IERR)
-
-
-! DEBUG VISUALIZE INITIAL TRIANGULATION 
-OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
-DO i=1,NP
-  WRITE(300,"(2F12.8)")POINTS(1,i),POINTS(2,i)
+! p=p(rand(size(p,1),1)<r0./max(r0),:);  
+! NOTE THIS WILL HAVE TO BE GENERALIZED TO ANY SIZING FUNCTION
+ALLOCATE(r0(NP)) 
+DO I = 1,NP
+  CALL LeftRightMeshSizes(IPTS(:,I),H)
+  r0(i)  = 1.0d0/(H**2)
 ENDDO
-CLOSE(300)
 
-OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
-DO i=1,NF
-  WRITE(301,"(3I8)")TRIAS(1,i),TRIAS(2,i),TRIAS(3,i)
+! p=p(rand(size(p,1),1)<r0./max(r0),:);  
+a = maxval(r0) 
+DO I = 1,NP 
+  b = r0(i)/a
+  if(rand().lt.b) then
+    ipts(1,i) = -9999.d0 
+    ipts(2,i) = -9999.d0
+  endif
 ENDDO
-CLOSE(301)
 
-END SUBROUTINE FormInitialTria2D
+CALL PushZerosToBack(IPTS,NP)
+
+
+END SUBROUTINE FormInitialPoints2D
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
+SUBROUTINE LeftRightMeshSizes(POINTS,H) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Simple left to right isotropic mesh size function 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+!INPUTS 
+real(kind=real_t),intent(in) :: points(2)
+!OUTPUTS 
+real(kind=real_t),intent(out) :: H 
+H = (1-points(1)) + 0.05  
+
+END SUBROUTINE
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
+SUBROUTINE PushZerosToBack(ARR,NP) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Push array entries with zero back of array and return updated NP size 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUTS 
+REAL(kind=real_t),ALLOCATABLE,INTENT(INOUT) :: ARR(:,:) 
+
+! OUTPUTS 
+INTEGER(kind=idx_t),INTENT(INOUT) :: NP 
+
+! LOCAL 
+INTEGER(kind=idx_t) :: I,temp, k
+
+K=0 
+DO I = 1,NP 
+  IF(ARR(1,I).GT.-9000.0d0) THEN 
+    K = K + 1 
+    ARR(1,K)=ARR(1,I) 
+    ARR(2,K)=ARR(2,I) 
+  ENDIF
+ENDDO
+
+temp = K ! temporary NP size  
+
+DO WHILE (K < NP ) 
+  K = K + 1 
+  ARR(1,K) = -9999.d0 
+  ARR(2,K) = -9999.d0 
+ENDDO  
+
+NP = temp 
+
+END SUBROUTINE PushZerosToBack
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE CalculateSignedDistance(IPTS,PSLG,SignedDistance)
@@ -415,10 +483,6 @@ DO I =1,tempSZ
                                results=KDRESULTS)
 
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
-  !print *, I
-  !print *, PSLG%Vert(1,I), PSLG%Vert(2,I) 
-  !print *, IPTS(1,I),IPTS(2,I)
-  !print *, "****************************"
 
   ! Determine if point is in the PSLG defined polygon
   CALL FPNPOLY(PSLG,IPTS(:,I),INoOUT)
@@ -433,13 +497,12 @@ call kdtree2_destroy(tp=tree)
 
 DEALLOCATE(KDRESULTS)
 
-print *, tempSZ
-! DEBUG VISUALIZE INITIAL TRIANGULATION 
-OPEN(UNIT=305,FILE="SignedDistance.txt",ACTION='WRITE')
-DO i=1,tempSZ
-  WRITE(305,"(F12.8)") SignedDistance(I)
-ENDDO
-CLOSE(305)
+!! DEBUG VISUALIZE INITIAL TRIANGULATION 
+!OPEN(UNIT=305,FILE="SignedDistance.txt",ACTION='WRITE')
+!DO i=1,tempSZ
+!  WRITE(305,"(F12.8)") SignedDistance(I)
+!ENDDO
+!CLOSE(305)
 
 END SUBROUTINE CalculateSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
