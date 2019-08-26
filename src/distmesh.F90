@@ -5,6 +5,8 @@
 !**************************************************
 PROGRAM DistMesh
 USE utils 
+USE YourMeshSize, ONLY : MeshSize
+
 IMPLICIT NONE
 
 integer :: i 
@@ -12,11 +14,12 @@ integer :: i
 !! SPECIFY PROBELM SPECIFIC PARAMETERS HERE
 DIM = 2
 LMIN=0.05d0
-CALL ReadPSLGtxt(PSLG,LMIN) ! READ IN BOUNDARY DESCRIPTION 
 !! 
 
+CALL ReadPSLGtxt(PSLG,LMIN) ! READ IN BOUNDARY DESCRIPTION 
+
 ! STEP 1-2: Create initial points to iterate on
-CALL FormInitialPoints2D(DIM,PSLG,LMIN,POINTS,NP)
+CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)
 
 ! STEP 3: Retriangulation by Delaunay algorithm 
 CALL DelTriangulate(DIM,NP,POINTS,NF,TRIAS,IERR)

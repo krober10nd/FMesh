@@ -53,6 +53,17 @@ TYPE(BounDescrip2D) :: PSLG
 ! error conditions 
 integer(kind=idx_t) :: ierr 
 
+
+! AN ISOTROPIC MESH SIZE FUNCTION 
+ABSTRACT INTERFACE
+     function IsoSZ(P)
+        import real_t
+        real(kind=real_t) :: sz
+        real(kind=real_t), intent (in) :: p(2)
+     end function IsoSZ
+END INTERFACE
+
+
 INTERFACE
 
 FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
@@ -78,6 +89,10 @@ real(kind=real_t),intent(in)           :: VERTy(NUMVERT)
 
 END FUNCTION pnpoly
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+END INTERFACE
+
+INTERFACE 
 
 FUNCTION faces(DIM, NUMPOINTS, fpoints, NUMFACETS)bind(c,name='faces')
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -119,6 +134,7 @@ END INTERFACE
 
 
 CONTAINS 
+
 
 
 
@@ -251,7 +267,8 @@ temp(1,nout)=PSLG%Vert(1,nx)
 end subroutine densify 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-subroutine FormInitialPoints2D(DIM,PSLG,LMIN,IPTS,NP)
+
+subroutine FormInitialPoints2D(HFX,DIM,PSLG,LMIN,IPTS,NP)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Form initial points to fill in the domain according to mesh size function
@@ -261,6 +278,7 @@ subroutine FormInitialPoints2D(DIM,PSLG,LMIN,IPTS,NP)
 implicit none 
 
 ! INPUTS 
+REAL(real_t)                   :: HFX  ! Mesh Size function 
 INTEGER(idx_t),INTENT(IN)      :: DIM
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 REAL(real_t),INTENT(IN)        :: LMIN       
@@ -362,10 +380,9 @@ CALL PushZerosToBack(IPTS,NP)
 
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
-! NOTE THIS WILL HAVE TO BE GENERALIZED TO ANY SIZING FUNCTION
 ALLOCATE(r0(NP)) 
 DO I = 1,NP
-  CALL LeftRightMeshSizes(IPTS(:,I),H)
+  H=HFX(IPTS(:,I))
   r0(i)  = 1.0d0/(H**2.0d0)
 ENDDO
 a = maxval(r0) 
@@ -381,24 +398,6 @@ CALL PushZerosToBack(IPTS,NP)
 
 
 END SUBROUTINE FormInitialPoints2D
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
-
-SUBROUTINE LeftRightMeshSizes(POINTS,H) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Simple left to right isotropic mesh size function 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-implicit none 
-
-!INPUTS 
-real(kind=real_t),intent(in) :: points(2)
-!OUTPUTS 
-real(kind=real_t),intent(out) :: H 
-H = (1.0d0-points(1))*0.15d0 + 0.05d0
-
-END SUBROUTINE
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 
