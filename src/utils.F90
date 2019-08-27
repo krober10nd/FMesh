@@ -29,6 +29,7 @@ real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
+integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
 
 INTEGER(kind=idx_t) :: DIM ! dimension of problem
 REAL(kind=real_t)   :: LMIN ! minimum mesh size 
@@ -76,7 +77,7 @@ FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
 ! https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-import idx_t,real_t,c_ptr
+import idx_t,real_t
 
 implicit none
 
@@ -87,7 +88,6 @@ real(kind=real_t),   value, intent(in) :: TESTx
 real(kind=real_t),   value, intent(in) :: TESTy
 real(kind=real_t),intent(in)           :: VERTx(NUMVERT)
 real(kind=real_t),intent(in)           :: VERTy(NUMVERT)
-
 
 END FUNCTION pnpoly
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -134,13 +134,96 @@ END SUBROUTINE destroy_storage
 END INTERFACE
 
 
-
 CONTAINS 
 
 
-SUBROUTINE WriteMeshData(DIM,POINTS,NP,FACETS,NF)
+SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Find the unique edges of the triangulation 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUT 
+INTEGER(idx_t),INTENT(IN) :: DIM,NF 
+INTEGER(idx_T),INTENT(IN),ALLOCATABLE :: FACES(:,:)
+
+! OUTPUT 
+INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: BARS(:,:)
+INTEGER(idx_t),INTENT(OUT) :: NumBars
+
+! 1. Determine non unique edges of mesh 
+INTEGER(idx_t) :: i,k,temp
+INTEGER(idx_t) :: junkShort(2) 
+INTEGER(8)     :: junkLong 
+INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:),tmpB3(:)
+
+ALLOCATE(BARS(3*NF,2))
+BARS = 0
+K = 0 
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACES(I,1) 
+  BARS(K,2) = FACES(I,2)
+ENDDO
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACES(I,1) 
+  BARS(K,2) = FACES(I,3)
+ENDDO
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACES(I,2) 
+  BARS(K,2) = FACES(I,3)
+ENDDO
+
+NumBars = K 
+! 2. Ensure first column has a smaller value than 2nd column 
+DO I = 1,NumBars
+  IF(BARS(I,1).GT.BARS(I,2)) THEN 
+    temp = BARS(I,1) 
+    BARS(I,1) = BARS(I,2) 
+    BARS(I,2) = temp 
+  ENDIF  
+ENDDO
+
+ALLOCATE(tmpB1(NumBars)) 
+
+! 3. Convert to unique integer numbers using bitwise shift op
+DO I = 1,NumBars
+  tmpB1(I) = TRANSFER((/BARS(I,1),BARS(I,2)/),junkLONG)  
+ENDDO
+
+! 4. Apply sorting method to sort in ascending order 
+CALL QuickSort(tmpB1,1,NumBars) 
+
+ALLOCATE(tmpB2(NumBars))
+tmpB2=0
+! 5. Only keep unique entries 
+tmpB2(1) = tmpB1(1) 
+K=1 
+DO I = 2,NumBars-1
+  IF(tmpB1(I).NE.tmpB2(K)) THEN 
+    K = K + 1 
+    tmpB2(K) = tmpB1(I) 
+  ENDIF
+ENDDO
+NumBars = K 
+
+! 6. Convert back to the bar format
+BARS = 0 
+DO I = 1,NumBars 
+  BARS(I,:) = TRANSFER(tmpB2(I),junkShort)
+ENDDO 
+
+END SUBROUTINE findUniqueBars 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+SUBROUTINE WriteMesh(DIM,POINTS,NP,FACETS,NF)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Write the mesh to disk 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
@@ -175,7 +258,7 @@ ELSE
     ! 3D VISUALIZATION GOES HERE 
 ENDIF
 
-END SUBROUTINE WriteMeshData
+END SUBROUTINE WriteMesh
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE ReadPSLGtxt(PSLG,LMIN) 
@@ -398,6 +481,7 @@ DO I = 1,NY
   ENDDO
 ENDDO
 
+PRINT *, NP 
 
 ! 2. Remove points outside the region, apply the rejection method
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -418,9 +502,11 @@ DO I = 1,NP
   ENDIF
 ENDDO
 
+DEALLOCATE(DIST,XG,YG,XVEC,YVEC) 
+
 ! push them to the back of the array
 CALL PushZerosToBackREAL(IPTS,NP)
-
+!
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(NP)) 
@@ -438,7 +524,6 @@ DO I = 1,NP
 ENDDO
 
 CALL PushZerosToBackREAL(IPTS,NP)
-
 
 END SUBROUTINE FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -548,10 +633,12 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: SignedDistance(:)
 
 ! LOCAL 
 TYPE(kdtree2), POINTER :: TREE=>null()
-TYPE(kdtree2_result), ALLOCATABLE :: KDRESULTS(:)
+TYPE(kdtree2_result),ALLOCATABLE :: KDRESULTS(:)
 INTEGER(kind=idx_t) :: tempSZ
-INTEGER(kind=idx_t) :: INoOUT 
-INTEGER(kind=idx_t) :: I
+INTEGER(kind=idx_t) :: INoOUT
+INTEGER(kind=idx_t) :: I,J,K
+
+REAL(real_t),ALLOCATABLE :: tempR(:) 
 
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
@@ -559,17 +646,37 @@ tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
 ! Loop over all the initial points 
 tempSZ = SIZE(IPTS,1) 
 ALLOCATE(SignedDistance(tempSZ))
-
-ALLOCATE(KDRESULTS(1))
-
+!ALLOCATE(KDRESULTS(1)) 
+ALLOCATE(KDRESULTS(tempSZ)) 
 INoOUT = -999
+! THIS NEEDS TO BE FIXED!!!
+! can we call the kdtree through a vector?
+ALLOCATE(tempR(tempSZ*2)) 
+K=0
 DO I =1,tempSZ
-  call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1, & 
-                               results=KDRESULTS)
+  K = K + 1
+  tempR(K) = IPTS(I,1)
+  K = K + 1 
+  tempR(K) = IPTS(I,2)
+ENDDO
+print *,"HERE" 
+call kdtree2_n_nearest(tp=tree,qv=tempR,nn=1,results=KDRESULTS)
+do I = 1,1
+  print *, SQRT(KDRESULTS(I)%DIS) 
+enddo
+
+stop
+
+
+! can we call fpnpoly with a bunch of queries and only do the call once?
+
+
+DO I =1,tempSZ
+  call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1,results=KDRESULTS)
 
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
 
-  ! Determine if point is in the PSLG defined polygon
+  !! Determine if point is in the PSLG defined polygon
   CALL FPNPOLY(PSLG,IPTS(I,:),INoOUT)
   
   IF(INoOUT.EQ.1) THEN 
@@ -582,16 +689,18 @@ call kdtree2_destroy(tp=tree)
 
 DEALLOCATE(KDRESULTS)
 
+
 !! DEBUG VISUALIZE SDF
+!print *, "WRITING" 
 !OPEN(UNIT=305,FILE="SignedDistance.txt",ACTION='WRITE')
 !DO i=1,tempSZ
 !  WRITE(305,"(3F12.8)") IPTS(i,1),IPTS(i,2),SignedDistance(I)
 !ENDDO
 !CLOSE(305)
+!stop
 
 END SUBROUTINE CalcSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -615,7 +724,6 @@ INoOUT = pnpoly(PSLG%NumVert, PSLG%Vert(:,1), PSLG%Vert(:,2), &
 
 END SUBROUTINE 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 
 SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -642,10 +750,16 @@ INTEGER(kind=idx_t) :: INoOUT
 type(c_ptr) :: cfacetemp
 integer(kind=idx_t),pointer :: ffacetemp(:)
 real(real_t),allocatable :: CENTROIDS(:,:)
+real(real_t),allocatable :: tranTemp(:,:)
+
 integer :: i,j,k
 
 ! call qhull library 
-cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
+print *, "HEY IN HERE" 
+allocate(tranTemp(DIM,NP))
+tranTemp = TRANSPOSE(POINTS)
+print *, "HEY TEST TWO" 
+cfacetemp = faces(DIM,NP,tranTemp,NF)
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 
@@ -828,44 +942,39 @@ end if
 END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE getBars(DIM,FACETS,NF,NP,BARS)
+recursive subroutine quicksort(a, first, last)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Gets all the edges of a simplicial complex. Note edges may be duplicated. 
-! bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])]; % Interior bars duplicated
+! quicksort.f -*-f90-*-
+! Author: t-nissie
+! License: GPLv3
+! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-implicit none 
+!
+  implicit none
+  integer(8)  a(*), x, t
+  integer first, last
+  integer i, j
 
-! INPUT 
-INTEGER(idx_t),INTENT(IN) :: DIM,NF,NP
-INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACETS(:,:)
-
-! OUTPUT 
-INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: BARS(:,:)
-
-! LOCAL 
-INTEGER(idx_t) :: i,k
-
-ALLOCATE(BARS(3*NF,2))
-BARS = 0
-K = 0 
-DO I = 1,NF 
-  K = K + 1
-  BARS(K,1) = FACETS(I,1) 
-  BARS(K,2) = FACETS(I,2)
-ENDDO
-DO I = 1,NF 
-  K = K + 1
-  BARS(K,1) = FACETS(I,1) 
-  BARS(K,2) = FACETS(I,3)
-ENDDO
-DO I = 1,NF 
-  K = K + 1
-  BARS(K,1) = FACETS(I,2) 
-  BARS(K,2) = FACETS(I,3)
-ENDDO
-
-END SUBROUTINE
+  x = a( (first+last) / 2 )
+  i = first
+  j = last
+  do
+     do while (a(i) < x)
+        i=i+1
+     end do
+     do while (x < a(j))
+        j=j-1
+     end do
+     if (i >= j) exit
+     t = a(i);  a(i) = a(j);  a(j) = t
+     i=i+1
+     j=j-1
+  end do
+  if (first < i-1) call quicksort(a, first, i-1)
+  if (j+1 < last)  call quicksort(a, j+1, last)
+end subroutine quicksort
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 END MODULE UTILS
