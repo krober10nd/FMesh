@@ -30,11 +30,11 @@ real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points f
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 
-INTEGER(kind=idx_t) :: DIM
-REAL(kind=real_t)   :: LMIN
-REAL(kind=real_t)   :: BBOX(4) 
+INTEGER(kind=idx_t) :: DIM ! dimension of problem
+REAL(kind=real_t)   :: LMIN ! minimum mesh size 
+REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
 
-! parameters for distmesh
+! some parameters for distmesh
 REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
 REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
 REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
@@ -55,8 +55,8 @@ TYPE(BounDescrip2D) :: PSLG
 ! error conditions 
 integer(kind=idx_t) :: ierr 
 
-
 ! AN ISOTROPIC MESH SIZE FUNCTION 
+! this is defined by the user in YourMeshSize.F90 module
 ABSTRACT INTERFACE
      function IsoSZ(P)
         import real_t
@@ -146,8 +146,8 @@ SUBROUTINE WriteMeshData(DIM,POINTS,NP,FACETS,NF)
 implicit none 
 
 ! INPUT 
-REAL(real_t),INTENT(IN) :: POINTS(DIM,NP) 
-INTEGER(idx_t),INTENT(IN) :: FACETS(DIM+1,NF) 
+REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:) 
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACETS(:,:) 
 INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM 
 
 ! OUTPUT 
@@ -160,13 +160,13 @@ IF(DIM.EQ.2) THEN
   ! 2D VISUALIZATION GOES HERE 
   OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
   DO i=1,NP
-    WRITE(300,"(2F12.8)")POINTS(1,i),POINTS(2,i)
+    WRITE(300,"(2F16.8)")POINTS(i,1),POINTS(i,2)
   ENDDO
   CLOSE(300)
   
   OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
   DO i=1,NF
-    WRITE(301,"(3I8)")FACETS(1,i),FACETS(2,i),FACETS(3,i)
+    WRITE(301,"(3I8)")FACETS(i,1),FACETS(i,2),FACETS(i,3)
   ENDDO
   CLOSE(301)
 
@@ -268,7 +268,7 @@ ENDIF
 
 NOUT=SUMIN+NX;
 
-ALLOCATE(temp(2,NOUT)) 
+ALLOCATE(temp(NOUT,2)) 
 temp = -99999.d0
 
 n=1
@@ -291,18 +291,19 @@ enddo
 temp(nout,2)=PSLG%Vert(ny,2)
 temp(nout,1)=PSLG%Vert(nx,1)
 
-! NEED TO TEST MULTIPLY CONNECTED POLYGONS
-!! debug 
+!! NEED TO TEST MULTIPLY CONNECTED POLYGONS
+!!! debug 
 !OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
 !do i = 1,nout 
-!  WRITE(303,"(2F12.8)")temp(1,i),temp(2,i)
+!  WRITE(303,"(2F12.8)")temp(i,1),temp(i,2)
 !ENDDO
 !CLOSE(303)
-!DEALLOCATE(PSLG%Vert)
-!ALLOCATE(PSLG%Vert(PSLG%DIM,NOUT))
-!PSLG%Vert = temp 
-!PSLG%NumVert = NOUT
-!DEALLOCATE(temp)
+
+DEALLOCATE(PSLG%Vert)
+ALLOCATE(PSLG%Vert(NOUT,PSLG%DIM))
+PSLG%Vert = temp 
+PSLG%NumVert = NOUT
+DEALLOCATE(temp)
 
 end subroutine densify 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -347,10 +348,10 @@ LOGICAL,ALLOCATABLE      :: keep(:)
 ! x(2:2:end,:)=x(2:2:end,:)+h0/2;                      % Shift even rows
 ! p=[x(:),y(:)];                                       % List of node coordinates
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-BBOX(1) = MINVAL(PSLG%Vert(1,:))
-BBOX(2) = MAXVAL(PSLG%Vert(1,:))
-BBOX(3) = MINVAL(PSLG%Vert(2,:))
-BBOX(4) = MAXVAL(PSLG%Vert(2,:))
+BBOX(1) = MINVAL(PSLG%Vert(:,1))
+BBOX(2) = MAXVAL(PSLG%Vert(:,1))
+BBOX(3) = MINVAL(PSLG%Vert(:,2))
+BBOX(4) = MAXVAL(PSLG%Vert(:,2))
 
 temp=LMIN*(sqrt(3.0d0)/2.0d0)
 NX=FLOOR((BBOX(2) - BBOX(1))/LMIN)+1
@@ -416,9 +417,9 @@ DO I = 1,NP
     IPTS(I,2) = -9999.d0
   ENDIF
 ENDDO
+
 ! push them to the back of the array
 CALL PushZerosToBackREAL(IPTS,NP)
-
 
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
@@ -438,7 +439,6 @@ ENDDO
 
 CALL PushZerosToBackREAL(IPTS,NP)
 
-print *, " NUMBER OF INITIAL POINTS ",NP
 
 END SUBROUTINE FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -582,15 +582,16 @@ call kdtree2_destroy(tp=tree)
 
 DEALLOCATE(KDRESULTS)
 
-!! DEBUG VISUALIZE INITIAL TRIANGULATION 
+!! DEBUG VISUALIZE SDF
 !OPEN(UNIT=305,FILE="SignedDistance.txt",ACTION='WRITE')
 !DO i=1,tempSZ
-!  WRITE(305,"(F12.8)") SignedDistance(I)
+!  WRITE(305,"(3F12.8)") IPTS(i,1),IPTS(i,2),SignedDistance(I)
 !ENDDO
 !CLOSE(305)
 
 END SUBROUTINE CalcSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
 
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -628,7 +629,7 @@ implicit none
 ! INPUTS 
 integer(kind=idx_t), intent(in) :: DIM
 integer(kind=idx_t), intent(in) :: NP
-real(kind=real_t),   intent(in) :: POINTS(DIM,NP)
+real(kind=real_t),   intent(in),ALLOCATABLE :: POINTS(:,:)
 integer(kind=idx_t), intent(inout):: NF
 TYPE(BounDescrip2D) :: PSLG 
 
@@ -694,7 +695,7 @@ SUBROUTINE CalcBaryCenter(DIM,POINTS,NP,FACES,NF,CENTROIDS)
 implicit none 
 
 ! INPUTS 
-REAL(real_t),INTENT(IN)             :: POINTS(DIM,NP)
+REAL(real_t),INTENT(IN),ALLOCATABLE   :: POINTS(:,:)
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACES(:,:)
 INTEGER(idx_t),INTENT(IN)           :: NP,NF,DIM
 
@@ -704,17 +705,17 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: CENTROIDS(:,:)
 ! LOCAL
 INTEGER(idx_t) :: tempF(DIM+1) 
 REAL(real_t)   :: temp(DIM,DIM+1) 
-INTEGER(idx_t) :: i,j
+INTEGER(idx_t) :: i,j,k
 
-ALLOCATE(CENTROIDS(DIM,NF)) 
+ALLOCATE(CENTROIDS(NF,DIM)) 
 
 DO I = 1,NF
-  tempF = FACES(:,I)
-  DO J = 1,DIM+1 
+  tempF = FACES(I,:)
+  DO J = 1,DIM+1 ! for each face
     temp(:,J) = POINTS(tempF(J),:)
   ENDDO
-  DO J = 1,DIM
-    CENTROIDS(I,J) = SUM(temp(J,:))/DBLE(DIM+1)
+  DO K = 1,DIM
+    CENTROIDS(I,K) = SUM(temp(K,:))/DBLE(DIM+1)
   ENDDO
 ENDDO
 
@@ -851,7 +852,7 @@ BARS = 0
 K = 0 
 DO I = 1,NF 
   K = K + 1
-  BARS(K,1) = FACETS(I,I) 
+  BARS(K,1) = FACETS(I,1) 
   BARS(K,2) = FACETS(I,2)
 ENDDO
 DO I = 1,NF 

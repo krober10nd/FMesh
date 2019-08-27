@@ -9,23 +9,26 @@ USE YourMeshSize, ONLY : MeshSize
 
 IMPLICIT NONE
 
+integer i 
+
 DIM = 2
-LMIN=0.0001d0
+LMIN=0.0012d0
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
 CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Step 1-2: Create initial points to iterate on
 
-STOP 
-
 ALLOCATE(PointsOLD(NP,DIM)) 
 PointsOld = -9999.0d0                                       ! For the first iteration 
+
+print *, "TRIA'ing NP ",NP," points "
 DO
   ! 3. Retriangulation by the Delaunay algorithm
-  IF(MAXVAL(SQRT(SUM((Points-PointsOld)**2,2))/LMIN).GT.TTOL) THEN ! Any Large Movement?
+  IF(MAXVAL(SQRT(SUM((Points(1:NP,:)-PointsOld(1:NP,:))**2,2))/LMIN).GT.TTOL) THEN ! Any Large Movement?
 
+    print *, "TRIA'ing NP ",NP," points "
     CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)      
-
+    print *, "PAST HERE "
     PointsOld=Points
 
     !% 4. Describe each bar by a unique pair of nodes
@@ -34,11 +37,12 @@ DO
 
     !SUBROUTINE WriteMeshData(DIM,POINTS,NP,FACETS,NF)
     ! 5. Graphical output of the current mesh
-    CALL WriteMeshData(DIM,POINTS,NP,TRIAS,NF)
+    !CALL WriteMeshData(DIM,POINTS,NP,TRIAS,NF)
+    EXIT 
   ENDIF
 
   ! 6. Move mesh points based on bar lengths L and forces F
-  CALL CalculateEdgeLengths()
+  !CALL CalculateEdgeLengths()
 
 ENDDO
 
