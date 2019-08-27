@@ -9,33 +9,38 @@ USE YourMeshSize, ONLY : MeshSize
 
 IMPLICIT NONE
 
-integer :: i 
-
-!! SPECIFY PROBELM SPECIFIC PARAMETERS HERE
 DIM = 2
-LMIN=0.05d0
-!! 
+LMIN=0.0001d0
 
-CALL ReadPSLGtxt(PSLG,LMIN) ! READ IN BOUNDARY DESCRIPTION 
+CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
-! STEP 1-2: Create initial points to iterate on
-CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)
+CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Step 1-2: Create initial points to iterate on
 
-! STEP 3: Retriangulation by Delaunay algorithm 
-CALL DelTriangulate(DIM,NP,POINTS,NF,TRIAS,IERR)
+STOP 
 
-! DEBUG VISUALIZE INITIAL TRIANGULATION 
-OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
-DO i=1,NP
-  WRITE(300,"(2F12.8)")POINTS(1,i),POINTS(2,i)
+ALLOCATE(PointsOLD(NP,DIM)) 
+PointsOld = -9999.0d0                                       ! For the first iteration 
+DO
+  ! 3. Retriangulation by the Delaunay algorithm
+  IF(MAXVAL(SQRT(SUM((Points-PointsOld)**2,2))/LMIN).GT.TTOL) THEN ! Any Large Movement?
+
+    CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)      
+
+    PointsOld=Points
+
+    !% 4. Describe each bar by a unique pair of nodes
+    !bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])]; % Interior bars duplicated
+    !bars=unique(sort(bars,2),’rows’); %
+
+    !SUBROUTINE WriteMeshData(DIM,POINTS,NP,FACETS,NF)
+    ! 5. Graphical output of the current mesh
+    CALL WriteMeshData(DIM,POINTS,NP,TRIAS,NF)
+  ENDIF
+
+  ! 6. Move mesh points based on bar lengths L and forces F
+  CALL CalculateEdgeLengths()
+
 ENDDO
-CLOSE(300)
-
-OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
-DO i=1,NF
-  WRITE(301,"(3I8)")TRIAS(1,i),TRIAS(2,i),TRIAS(3,i)
-ENDDO
-CLOSE(301)
 
 
 

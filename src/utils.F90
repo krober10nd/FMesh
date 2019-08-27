@@ -24,7 +24,9 @@ implicit none
 
 ! Later on this should become a derived type 
 integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [dim+1 x nf] array of point indices 
+integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
 real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
+real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 
@@ -136,7 +138,45 @@ END INTERFACE
 CONTAINS 
 
 
+SUBROUTINE WriteMeshData(DIM,POINTS,NP,FACETS,NF)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
 
+! INPUT 
+REAL(real_t),INTENT(IN) :: POINTS(DIM,NP) 
+INTEGER(idx_t),INTENT(IN) :: FACETS(DIM+1,NF) 
+INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM 
+
+! OUTPUT 
+! WRITES SEVERAL TEXT FILES WITH POINTS AND FACETS 
+
+! LOCAL 
+INTEGER(idx_t) :: i 
+
+IF(DIM.EQ.2) THEN 
+  ! 2D VISUALIZATION GOES HERE 
+  OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
+  DO i=1,NP
+    WRITE(300,"(2F12.8)")POINTS(1,i),POINTS(2,i)
+  ENDDO
+  CLOSE(300)
+  
+  OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
+  DO i=1,NF
+    WRITE(301,"(3I8)")FACETS(1,i),FACETS(2,i),FACETS(3,i)
+  ENDDO
+  CLOSE(301)
+
+ELSE 
+
+    ! 3D VISUALIZATION GOES HERE 
+ENDIF
+
+END SUBROUTINE WriteMeshData
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE ReadPSLGtxt(PSLG,LMIN) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -169,11 +209,11 @@ IF(fileFound) THEN
       //" ",tempNP," points in ",tempDIM," dimensions."
   WRITE(*,'(A)') "********************************************************"
 
-  ALLOCATE(PSLG%Vert(tempDIM,tempNP))
+  ALLOCATE(PSLG%Vert(tempNP,tempDIM))
   PSLG%NumVert = tempNP 
   PSLG%dim = tempDIM 
   DO I = 1,PSLG%NumVert
-    READ(1,*) PSLG%Vert(1,I),PSLG%Vert(2,I)
+    READ(1,*) PSLG%Vert(I,1),PSLG%Vert(I,2)
   ENDDO
   CLOSE(1)
   WRITE(*,'(A)') "INFO: Read PSLG file succesfully!"
@@ -211,12 +251,12 @@ INTEGER(kind=idx_t) :: NIN(PSLG%NumVert-1)
 INTEGER(kind=idx_t) :: SUMIN
 INTEGER(kind=idx_t) :: i,j,nstep,n,ni
 
-nx = size(PSLG%Vert(1,:))
-ny = size(PSLG%Vert(2,:))
+nx = size(PSLG%Vert(:,1))
+ny = size(PSLG%Vert(:,2))
 
 DO i = 2,PSLG%NumVert
-  DY(i)=ABS(PSLG%Vert(2,i)-PSLG%Vert(2,i-1));
-  DX(i)=ABS(PSLG%Vert(1,i)-PSLG%Vert(1,i-1));
+  DY(i)=ABS(PSLG%Vert(i,2)-PSLG%Vert(i-1,2));
+  DX(i)=ABS(PSLG%Vert(i,1)-PSLG%Vert(i-1,1));
   NIN(i-1)=CEILING(MAXVAL((/DX(i),DY(i)/))/maxdiff)-1;
 ENDDO
 
@@ -235,21 +275,21 @@ n=1
 do i=1,nx-1
     ni=nin(i)
     if(ni.EQ.0) THEN
-        temp(2,n)=PSLG%Vert(2,i)
-        temp(1,n)=PSLG%Vert(1,i)
+        temp(n,2)=PSLG%Vert(i,2)
+        temp(n,1)=PSLG%Vert(i,1)
         nstep=1;
     ELSE
-        ilat=linspace(PSLG%Vert(2,i),PSLG%Vert(2,i+1),ni+2)
-        ilon=linspace(PSLG%Vert(1,i),PSLG%Vert(1,i+1),ni+2)
-        temp(2,n:n+ni)=ilat(1:ni+1)
-        temp(1,n:n+ni)=ilon(1:ni+1)
+        ilat=linspace(PSLG%Vert(i,2),PSLG%Vert(i+1,2),ni+2)
+        ilon=linspace(PSLG%Vert(i,1),PSLG%Vert(i+1,1),ni+2)
+        temp(n:n+ni,2)=ilat(1:ni+1)
+        temp(n:n+ni,1)=ilon(1:ni+1)
         
         nstep=ni+1;
     endif
     n = n + nstep 
 enddo
-temp(2,nout)=PSLG%Vert(2,ny)
-temp(1,nout)=PSLG%Vert(1,nx)
+temp(nout,2)=PSLG%Vert(ny,2)
+temp(nout,1)=PSLG%Vert(nx,1)
 
 ! NEED TO TEST MULTIPLY CONNECTED POLYGONS
 !! debug 
@@ -324,7 +364,7 @@ WRITE(*,'(A)') "********************************************************"
 
 ALLOCATE(XVEC(NX),YVEC(NY))
 
-ALLOCATE(IPTS(2,NX*NY))
+ALLOCATE(IPTS(NX*NY,2))
 IPTS = -99999.d0
 
 DO I = 1,NX
@@ -352,10 +392,11 @@ NP = 0
 DO I = 1,NY
   DO J = 1,NX 
     NP = NP + 1
-    IPTS(1,NP) = XG(i,j)
-    IPTS(2,NP) = YG(i,j) 
+    IPTS(NP,1) = XG(i,j)
+    IPTS(NP,2) = YG(i,j) 
   ENDDO
 ENDDO
+
 
 ! 2. Remove points outside the region, apply the rejection method
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -364,44 +405,46 @@ ENDDO
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);                % Rejection method.
 ! N=size(p,1);                                         % Number of initial points.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-CALL CalculateSignedDistance(IPTS,PSLG,Dist) 
+CALL CalcSignedDistance(IPTS,PSLG,Dist) 
 
 GEPS = 0.01d0 * LMIN  ! this is how it was in DistMesh
 
 ! Remove points with dist > geps (mark them)
 DO I = 1,NP
   IF(Dist(I).GT.GEPS) THEN 
-    IPTS(1,I) = -9999.d0
-    IPTS(2,I) = -9999.d0
+    IPTS(I,1) = -9999.d0
+    IPTS(I,2) = -9999.d0
   ENDIF
 ENDDO
 ! push them to the back of the array
-CALL PushZerosToBack(IPTS,NP)
+CALL PushZerosToBackREAL(IPTS,NP)
+
 
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(NP)) 
 DO I = 1,NP
-  H=HFX(IPTS(:,I))
+  H=HFX(IPTS(I,:))
   r0(i)  = 1.0d0/(H**2.0d0)
 ENDDO
 a = maxval(r0) 
 DO I = 1,NP 
   b = r0(i)/a
   if(rand().gt.b) then
-    ipts(1,i) = -9999.d0 
-    ipts(2,i) = -9999.d0
+    ipts(I,1) = -9999.d0 
+    ipts(I,2) = -9999.d0
   endif
 ENDDO
 
-CALL PushZerosToBack(IPTS,NP)
+CALL PushZerosToBackREAL(IPTS,NP)
 
+print *, " NUMBER OF INITIAL POINTS ",NP
 
 END SUBROUTINE FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 
-SUBROUTINE PushZerosToBack(ARR,NP) 
+SUBROUTINE PushZerosToBackREAL(ARR,NP) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Push array entries with zero back of array and return updated NP size 
@@ -416,14 +459,15 @@ REAL(kind=real_t),ALLOCATABLE,INTENT(INOUT) :: ARR(:,:)
 INTEGER(kind=idx_t),INTENT(INOUT) :: NP 
 
 ! LOCAL 
-INTEGER(kind=idx_t) :: I,temp, k
+INTEGER(kind=idx_t) :: I,J,temp, k
 
 K=0 
 DO I = 1,NP 
-  IF(ARR(1,I).GT.-9000.0d0) THEN 
+  IF(ARR(I,1).GT.-9000.0d0) THEN 
     K = K + 1 
-    ARR(1,K)=ARR(1,I) 
-    ARR(2,K)=ARR(2,I) 
+    DO J =1,SIZE(ARR,2)
+      ARR(K,J)=ARR(I,J) 
+    ENDDO
   ENDIF
 ENDDO
 
@@ -431,16 +475,59 @@ temp = K ! temporary NP size
 
 DO WHILE (K < NP ) 
   K = K + 1 
-  ARR(1,K) = -9999.d0 
-  ARR(2,K) = -9999.d0 
+  DO J = 1,SIZE(ARR,2) 
+    ARR(K,J) = -9999.d0 
+  ENDDO
 ENDDO  
 
 NP = temp 
 
-END SUBROUTINE PushZerosToBack
+END SUBROUTINE PushZerosToBackREAL
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE CalculateSignedDistance(IPTS,PSLG,SignedDistance)
+SUBROUTINE PushZerosToBackINT(ARR,NP) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Push array entries with zero back of array and return updated NP size 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUTS 
+INTEGER(kind=idx_t),ALLOCATABLE,INTENT(INOUT) :: ARR(:,:) 
+
+! OUTPUTS 
+INTEGER(kind=idx_t),INTENT(INOUT) :: NP 
+
+! LOCAL 
+INTEGER(kind=idx_t) :: I,J,temp, k
+
+K=0 
+DO I = 1,NP 
+  IF(ARR(I,1).GT.-9000) THEN 
+    K = K + 1 
+    DO J =1,SIZE(ARR,2)
+      ARR(K,J)=ARR(I,J) 
+    ENDDO
+  ENDIF
+ENDDO
+
+temp = K ! temporary NP size  
+
+DO WHILE (K < NP ) 
+  K = K + 1 
+  DO J = 1,SIZE(ARR,2) 
+    ARR(K,J) = -9999
+  ENDDO
+ENDDO  
+
+NP = temp 
+
+END SUBROUTINE PushZerosToBackInt
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
+SUBROUTINE CalcSignedDistance(IPTS,PSLG,SignedDistance)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Given a PSLG and a set of points, determine the nearest 
@@ -467,23 +554,23 @@ INTEGER(kind=idx_t) :: INoOUT
 INTEGER(kind=idx_t) :: I
 
 ! BUILD KD-TREE with PSLG vertices
-tree => kdtree2_create(PSLG%Vert,rearrange=.true.,sort=.true.)
+tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
 
 ! Loop over all the initial points 
-tempSZ = SIZE(IPTS,2) 
+tempSZ = SIZE(IPTS,1) 
 ALLOCATE(SignedDistance(tempSZ))
 
 ALLOCATE(KDRESULTS(1))
 
 INoOUT = -999
 DO I =1,tempSZ
-  call kdtree2_n_nearest(tp=tree,qv=IPTS(:,I),nn=1, & 
+  call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1, & 
                                results=KDRESULTS)
 
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
 
   ! Determine if point is in the PSLG defined polygon
-  CALL FPNPOLY(PSLG,IPTS(:,I),INoOUT)
+  CALL FPNPOLY(PSLG,IPTS(I,:),INoOUT)
   
   IF(INoOUT.EQ.1) THEN 
     SignedDistance(I)= -SignedDistance(I)
@@ -502,7 +589,7 @@ DEALLOCATE(KDRESULTS)
 !ENDDO
 !CLOSE(305)
 
-END SUBROUTINE CalculateSignedDistance
+END SUBROUTINE CalcSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
@@ -522,14 +609,14 @@ REAL(kind=real_t), INTENT(IN) :: TEST(2)
 INTEGER(kind=idx_t),INTENT(OUT) :: INoOUT 
 
 !FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
-INoOUT = pnpoly(PSLG%NumVert, PSLG%Vert(1,:), PSLG%Vert(2,:), &
+INoOUT = pnpoly(PSLG%NumVert, PSLG%Vert(:,1), PSLG%Vert(:,2), &
                 TEST(1),TEST(2))
 
 END SUBROUTINE 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 
-SUBROUTINE DelTriangulate(DIM, NP, POINTS, NF, FACETS,IERR)
+SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! calls qhull library from fortran language to output facet table of delaunay triangulation 
@@ -543,49 +630,109 @@ integer(kind=idx_t), intent(in) :: DIM
 integer(kind=idx_t), intent(in) :: NP
 real(kind=real_t),   intent(in) :: POINTS(DIM,NP)
 integer(kind=idx_t), intent(inout):: NF
+TYPE(BounDescrip2D) :: PSLG 
 
 ! OUTPUTS 
 integer(kind=idx_t),intent(out),allocatable :: FACETS(:,:)
 integer(kind=idx_t),INTENT(OUT) :: IERR
 
 ! LOCAL TO SUBROUTINE 
+INTEGER(kind=idx_t) :: INoOUT 
 type(c_ptr) :: cfacetemp
 integer(kind=idx_t),pointer :: ffacetemp(:)
+real(real_t),allocatable :: CENTROIDS(:,:)
 integer :: i,j,k
 
 ! call qhull library 
-cfacetemp = faces(DIM,NP,POINTS,NF)
+cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 
 ! reshape vector ffacetemp to facets array
 ! TODO: check if it's possible to allocate to memory with an error condition
-allocate(facets(DIM+1,NF))
+allocate(facets(NF,DIM+1))
 
 facets=0 
 k=0 
 do i = 1,NF
   do j = 1,DIM+1 
     k = k + 1
-    facets(j,i)=ffacetemp(k)+1 ! ensure indexing starts at 1
+    facets(i,j)=ffacetemp(k)+1 ! ensure indexing starts at 1
   enddo
 enddo
 
 ! IMPORTANT: RELEASE MEMORY MALLOC'ed in C 
 CALL destroy_storage(cfacetemp)
 
+ALLOCATE(CENTROIDS(NF,DIM)) 
+CALL CalcBaryCenter(DIM,POINTS,NP,FACETS,NF,CENTROIDS)  
+
+! Remove triangles whose centroid is out of the domain 
+DO I = 1,NF
+  CALL FPNPOLY(PSLG,CENTROIDS(I,:),INoOUT)
+  IF(INoOUT.EQ.0) THEN 
+    FACETS(I,:)=-9000
+  ENDIF
+ENDDO
+
+CALL PushZerosToBackINT(FACETS,NF) 
+
 ! TODO: BETTER ERROR CHECKING (SEE ZOLTAN ERROR LEVELS FOR REFERENCE?)
 ierr = 0 !! SUCCESS 
 
-END SUBROUTINE DelTriangulate
+END SUBROUTINE DelTriaWElim
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+SUBROUTINE CalcBaryCenter(DIM,POINTS,NP,FACES,NF,CENTROIDS)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!Calculate the centroid of the triangles described in the arrays POINTS FACES
+! For triangles: 
+! centroids = (p(t(:,1),:)+p(t(:,2),:)+p(t(:,3),:))/3;
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUTS 
+REAL(real_t),INTENT(IN)             :: POINTS(DIM,NP)
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACES(:,:)
+INTEGER(idx_t),INTENT(IN)           :: NP,NF,DIM
+
+! OUTPUTS
+REAL(real_t),INTENT(OUT),ALLOCATABLE :: CENTROIDS(:,:)
+
+! LOCAL
+INTEGER(idx_t) :: tempF(DIM+1) 
+REAL(real_t)   :: temp(DIM,DIM+1) 
+INTEGER(idx_t) :: i,j
+
+ALLOCATE(CENTROIDS(DIM,NF)) 
+
+DO I = 1,NF
+  tempF = FACES(:,I)
+  DO J = 1,DIM+1 
+    temp(:,J) = POINTS(tempF(J),:)
+  ENDDO
+  DO J = 1,DIM
+    CENTROIDS(I,J) = SUM(temp(J,:))/DBLE(DIM+1)
+  ENDDO
+ENDDO
+
+!OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
+!do i = 1,nf
+!  WRITE(303,"(2F12.8)")CENTROIDS(1,i),CENTROIDS(2,i)
+!ENDDO
+!CLOSE(303)
+
+END SUBROUTINE CalcBaryCenter
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE meshgrid2D(xgv, ygv, X, Y)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Create a struture grid of points using the vectors xgv and ygv
 ! this mimics what the MATLAB command does 
+! [xg,yg]=meshgrid(xvec,yvec)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   implicit none
@@ -606,6 +753,7 @@ FUNCTION linspace(a, b, n) result(s)
 ! Creates a vector s that spans the interval (a,b) with n points. 
 ! this mimics what the MATLAB command does 
 ! REFERENCE: https://github.com/certik/fortran-utils
+! vec = linspace(a,b,n) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none
@@ -678,5 +826,45 @@ else
 end if
 END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+SUBROUTINE getBars(DIM,FACETS,NF,NP,BARS)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Gets all the edges of a simplicial complex. Note edges may be duplicated. 
+! bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])]; % Interior bars duplicated
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUT 
+INTEGER(idx_t),INTENT(IN) :: DIM,NF,NP
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACETS(:,:)
+
+! OUTPUT 
+INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: BARS(:,:)
+
+! LOCAL 
+INTEGER(idx_t) :: i,k
+
+ALLOCATE(BARS(3*NF,2))
+BARS = 0
+K = 0 
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACETS(I,I) 
+  BARS(K,2) = FACETS(I,2)
+ENDDO
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACETS(I,1) 
+  BARS(K,2) = FACETS(I,3)
+ENDDO
+DO I = 1,NF 
+  K = K + 1
+  BARS(K,1) = FACETS(I,2) 
+  BARS(K,2) = FACETS(I,3)
+ENDDO
+
+END SUBROUTINE
 
 END MODULE UTILS
