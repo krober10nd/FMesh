@@ -1,11 +1,13 @@
 MODULE UTILS 
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!**************************************************
 ! PROCEDURES FOR FMesh
-! AUTHOR: Keith Jared Roberts, V1.0 August/19/2019
-!         Universidade de São Paulo, Brasil 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 
+! AUTHOR: Keith J. Roberts, 
+! PLACE: Universdade de Sao Paulo
+! START: 2019-08-17 
+!**************************************************
 
 implicit none
 
@@ -27,6 +29,7 @@ integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [dim+1 x nf] array 
 integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
 real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
+real(kind=real_t),allocatable   :: forces(:) ! [numbars x 1] array of spring forces on bars
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
@@ -121,11 +124,11 @@ SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
 ! releases memory that was allocated in c 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR
+USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR
 
-  IMPLICIT NONE
+IMPLICIT NONE
 
-  TYPE(C_PTR), INTENT(IN), VALUE :: p
+TYPE(C_PTR), INTENT(IN), VALUE :: p
 
 END SUBROUTINE destroy_storage
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -135,6 +138,87 @@ END INTERFACE
 
 
 CONTAINS 
+
+SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FORCES)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Update vertex locations according to calc'ed forces. 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+IMPLICIT NONE 
+
+! INPUTS 
+INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS 
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
+REAL(real_t),INTENT(IN),ALLOCATABLE :: FORCES(:)
+
+! OUTPUTS 
+REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:) 
+
+! LOCAL 
+INTEGER(idx_t) :: I 
+
+
+!     // move points
+!        for (int edge = 0; edge < edgeIndices.rows(); ++edge) {
+!            if (edgeIndices(edge, 0) >= fixedPoints.rows()) {
+!                points.row(edgeIndices(edge, 0)) += constants::deltaT * forceVector.row(edge);
+!            }
+!            if (edgeIndices(edge, 1) >= fixedPoints.rows()) {
+!                points.row(edgeIndices(edge, 1)) -= constants::deltaT * forceVector.row(edge);
+!            }
+!        }
+END SUBROUTINE 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FORCES) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Calculate forcing terms for each nodes based on mesh size function 
+! and actual length of the edge 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUTS
+REAL(real_t) :: HFX  ! Mesh Size function 
+INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
+REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
+
+! OUTPUTS
+REAL(real_t),INTENT(OUT),ALLOCATABLE :: FORCES(:) 
+
+! LOCAL 
+INTEGER(idx_t) :: i 
+REAL(real_t)   :: barvec(NUMBARS,DIM)
+REAL(real_t)   :: L(NUMBARS),L0(NUMBARS),LN(NUMBARS)
+REAL(real_t)   :: HBARS(NUMBARS)
+REAL(real_t)   :: midpt(2),a,b
+
+!barvec=p(bars(:,1),:)-p(bars(:,2),:); % List of bar vectors
+!L=sqrt(sum(barvec.^2,2)); % L = Bar lengths
+!hbars=feval(fh,(p(bars(:,1),:)+p(bars(:,2),:))/2,varargin{:});
+!L0=hbars*Fscale*median(L)/median(HBARS); ! From Roberts et al. 2019
+!LN = L./L0;  
+!F    = (1-LN.^4).*exp(-LN.^4)./LN; % Bossens-Heckbert edge force
+ALLOCATE(FORCES(NUMBARS))
+FORCES=0.0d0
+DO I = 1,NUMBARS
+  BARVEC(I,:)=POINTS(bars(I,1),:) - POINTS(bars(I,2),:)
+  L(I)=SQRT(BARVEC(I,1)**2 + BARVEC(I,2)**2)
+  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+  HBARS(I)=HFX(midpt)
+ENDDO 
+a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
+DO I = 1,NUMBARS
+  L0(I)=HBARS(I)*FSCALE*a/b
+  LN(I)=L(I)/L0(I)
+  FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+ENDDO
+
+END SUBROUTINE CalcForces
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 
 SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS) 
@@ -153,12 +237,12 @@ INTEGER(idx_T),INTENT(IN),ALLOCATABLE :: FACES(:,:)
 INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: BARS(:,:)
 INTEGER(idx_t),INTENT(OUT) :: NumBars
 
-! 1. Determine non unique edges of mesh 
 INTEGER(idx_t) :: i,k,temp
 INTEGER(idx_t) :: junkShort(2) 
 INTEGER(8)     :: junkLong 
 INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:),tmpB3(:)
 
+! 1. Determine non unique edges of mesh 
 ALLOCATE(BARS(3*NF,2))
 BARS = 0
 K = 0 
@@ -196,7 +280,7 @@ DO I = 1,NumBars
 ENDDO
 
 ! 4. Apply sorting method to sort in ascending order 
-CALL QuickSort(tmpB1,1,NumBars) 
+CALL quickSortINTLONG(tmpB1,1,NumBars) 
 
 ALLOCATE(tmpB2(NumBars))
 tmpB2=0
@@ -216,6 +300,12 @@ BARS = 0
 DO I = 1,NumBars 
   BARS(I,:) = TRANSFER(tmpB2(I),junkShort)
 ENDDO 
+
+!OPEN(UNIT=300,FILE="BARS.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  WRITE(300,"(2I8)")BARS(I,1),BARS(I,2)
+!ENDDO
+!CLOSE(300)
 
 END SUBROUTINE findUniqueBars 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -290,7 +380,6 @@ IF(fileFound) THEN
   WRITE(*,'(A)') "********************************************************"
   WRITE(*,'(A,I5,A,I5,A)') "INFO: Reading PSLG file called PSLG.txt with " &  
       //" ",tempNP," points in ",tempDIM," dimensions."
-  WRITE(*,'(A)') "********************************************************"
 
   ALLOCATE(PSLG%Vert(tempNP,tempDIM))
   PSLG%NumVert = tempNP 
@@ -300,8 +389,10 @@ IF(fileFound) THEN
   ENDDO
   CLOSE(1)
   WRITE(*,'(A)') "INFO: Read PSLG file succesfully!"
+  WRITE(*,'(A)') "********************************************************"
 ELSE
   WRITE(*,'(A)') "FATAL: PSLG.txt file not found"
+  WRITE(*,'(A)') "********************************************************"
   STOP  
 ENDIF
 
@@ -345,7 +436,9 @@ ENDDO
 
 SUMIN=SUM(NIN)
 IF(SUMIN.eq.0) then 
+    WRITE(*,'(A)') "                                      "
     WRITE(*,'(A)') "INFO: No insertion needed on PSLG."
+    WRITE(*,'(A)') "                                      "
     RETURN
 ENDIF
 
@@ -390,7 +483,6 @@ DEALLOCATE(temp)
 
 end subroutine densify 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 
 subroutine FormInitialPoints2D(HFX,DIM,PSLG,LMIN,IPTS,NP)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -440,11 +532,13 @@ temp=LMIN*(sqrt(3.0d0)/2.0d0)
 NX=FLOOR((BBOX(2) - BBOX(1))/LMIN)+1
 NY=FLOOR((BBOX(4) - BBOX(3))/temp)+1
 
+WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "********************************************************"
 WRITE(*,'(A,F6.3,A,F6.3,A,F6.3,A,F6.3)') "INFO: Domain extents are: " &  
        //" XMIN: ",BBOX(1)," XMAX: ",BBOX(2), " " & 
        //" YMIN: ",BBOX(3)," YMAX: ",BBOX(4) 
 WRITE(*,'(A)') "********************************************************"
+WRITE(*,'(A)') "                                      "
 
 ALLOCATE(XVEC(NX),YVEC(NY))
 
@@ -480,8 +574,6 @@ DO I = 1,NY
     IPTS(NP,2) = YG(i,j) 
   ENDDO
 ENDDO
-
-PRINT *, NP 
 
 ! 2. Remove points outside the region, apply the rejection method
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -527,7 +619,6 @@ CALL PushZerosToBackREAL(IPTS,NP)
 
 END SUBROUTINE FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 
 SUBROUTINE PushZerosToBackREAL(ARR,NP) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -611,7 +702,6 @@ NP = temp
 END SUBROUTINE PushZerosToBackInt
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-
 SUBROUTINE CalcSignedDistance(IPTS,PSLG,SignedDistance)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -638,38 +728,18 @@ INTEGER(kind=idx_t) :: tempSZ
 INTEGER(kind=idx_t) :: INoOUT
 INTEGER(kind=idx_t) :: I,J,K
 
-REAL(real_t),ALLOCATABLE :: tempR(:) 
-
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
 
 ! Loop over all the initial points 
 tempSZ = SIZE(IPTS,1) 
 ALLOCATE(SignedDistance(tempSZ))
-!ALLOCATE(KDRESULTS(1)) 
-ALLOCATE(KDRESULTS(tempSZ)) 
+ALLOCATE(KDRESULTS(1)) 
 INoOUT = -999
-! THIS NEEDS TO BE FIXED!!!
-! can we call the kdtree through a vector?
-ALLOCATE(tempR(tempSZ*2)) 
-K=0
-DO I =1,tempSZ
-  K = K + 1
-  tempR(K) = IPTS(I,1)
-  K = K + 1 
-  tempR(K) = IPTS(I,2)
-ENDDO
-print *,"HERE" 
-call kdtree2_n_nearest(tp=tree,qv=tempR,nn=1,results=KDRESULTS)
-do I = 1,1
-  print *, SQRT(KDRESULTS(I)%DIS) 
-enddo
 
-stop
-
-
+! can we call the kdtree through a vector? No
 ! can we call fpnpoly with a bunch of queries and only do the call once?
-
+! Does it matter?
 
 DO I =1,tempSZ
   call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1,results=KDRESULTS)
@@ -688,7 +758,6 @@ ENDDO
 call kdtree2_destroy(tp=tree)
 
 DEALLOCATE(KDRESULTS)
-
 
 !! DEBUG VISUALIZE SDF
 !print *, "WRITING" 
@@ -755,11 +824,10 @@ real(real_t),allocatable :: tranTemp(:,:)
 integer :: i,j,k
 
 ! call qhull library 
-print *, "HEY IN HERE" 
 allocate(tranTemp(DIM,NP))
 tranTemp = TRANSPOSE(POINTS)
-print *, "HEY TEST TWO" 
 cfacetemp = faces(DIM,NP,tranTemp,NF)
+deallocate(tranTemp)
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 
@@ -942,7 +1010,7 @@ end if
 END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-recursive subroutine quicksort(a, first, last)
+recursive subroutine quicksortINTLONG(a, first, last)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! quicksort.f -*-f90-*-
@@ -972,9 +1040,81 @@ recursive subroutine quicksort(a, first, last)
      i=i+1
      j=j-1
   end do
-  if (first < i-1) call quicksort(a, first, i-1)
-  if (j+1 < last)  call quicksort(a, j+1, last)
-end subroutine quicksort
+  if (first < i-1) call quicksortINTLONG(a, first, i-1)
+  if (j+1 < last)  call quicksortINTLONG(a, j+1, last)
+end subroutine quicksortINTLONG
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+recursive subroutine quicksortREAL(a, first, last)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! quicksort.f -*-f90-*-
+! Author: t-nissie
+! License: GPLv3
+! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+  implicit none
+  real(8)  a(*), x, t
+  integer first, last
+  integer i, j
+
+  x = a( (first+last) / 2 )
+  i = first
+  j = last
+  do
+     do while (a(i) < x)
+        i=i+1
+     end do
+     do while (x < a(j))
+        j=j-1
+     end do
+     if (i >= j) exit
+     t = a(i);  a(i) = a(j);  a(j) = t
+     i=i+1
+     j=j-1
+  end do
+  if (first < i-1) call quicksortREAL(a, first, i-1)
+  if (j+1 < last)  call quicksortREAL(a, j+1, last)
+end subroutine quicksortREAL
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+function median(a,first,last)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! the median of a vector of reals 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+IMPLICIT NONE
+
+! INPUTS 
+REAL(real_t),intent(in) :: a(*)
+INTEGER(idx_t),intent(in) :: first, last
+
+! OUTPUTS
+REAL(real_t) :: median 
+
+! LOCALS 
+INTEGER(idx_t) :: lng
+
+! 1. sort the numbers
+CALL quicksortREAL(a,first,last)
+
+! 2. If length is odd 
+lng = last - first + 1
+
+if(MOD(LNG,2).EQ.1) then
+  ! then odd length vec
+  median = a(floor(lng/2.0d0)+1)
+else
+  ! then even length vec
+  median = ( a((lng/2)+1) + a((lng/2)-1) )/2.0d0
+endif
+
+
+end function median
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 END MODULE UTILS
+
