@@ -42,10 +42,11 @@ REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right.
 REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
 REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
 REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
-REAL(kind=real_t),PARAMETER :: DELTAT=0.2d0 
+REAL(kind=real_t),PARAMETER :: DELTAT=0.1d0
 REAL(kind=real_t) :: GEPS 
 REAL(kind=real_t) :: DEPS 
 REAL(kind=real_t),PARAMETER :: EPS=EPSILON(1.d0) 
+INTEGER(kind=idx_t) :: iter,MaxIter
 
 ! 2D domain boundary description 
 TYPE BounDescrip2D
@@ -137,6 +138,93 @@ END INTERFACE
 
 CONTAINS 
 
+SUBROUTINE ProjectPointsBack(DIM,PSLG,POINTS,NP)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Update vertex locations according to calc'ed forces. 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+IMPLICIT NONE 
+
+! INPUTS 
+INTEGER(idx_t),INTENT(IN) :: DIM , NP 
+TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
+
+! OUTPUTS
+REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:)
+
+! LOCAL 
+INTEGER(idx_t) :: I
+INTEGER(idx_t) :: NOUT
+REAL(real_t),ALLOCATABLE :: Dist(:)
+LOGICAL        :: IsOut(NP) 
+REAL(real_t),ALLOCATABLE :: dgradx(:),dgrady(:),dgrad2(:)
+REAL(real_t),ALLOCATABLE :: tempDistx(:),tempDisty(:)
+REAL(real_t),ALLOCATABLE :: tempP1(:,:),tempP2(:,:)
+REAL(real_t) :: PointsOut(NP,DIM),DistOut(NP)
+
+DEPS = SQRT(EPSILON(1.d0)) 
+
+!  %7. Bring outside points back to the boundary
+!  d = feval(obj.fd,p,obj,[],1); ix = d > 0;                  % Find points outside (d>0)
+CALL CalcSignedDistance(POINTS,PSLG,Dist) 
+
+NOUT=0
+IsOut=.FALSE.; PointsOut=-99999.d0 ; DistOut=-9999.d0
+DO I=1,NP 
+  IF(Dist(I).GT.0) THEN 
+    NOUT=NOUT+1
+    IsOut(I) = .TRUE.
+    PointsOut(NOUT,:) = Points(I,:)
+    DistOut(NOUT)=Dist(I)
+  ENDIF
+ENDDO
+
+!  if sum(ix) > 0
+IF(NOUT.GT.0) THEN  
+
+  ALLOCATE(dgradx(NOUT),dgrady(NOUT),dgrad2(NOUT))
+  ALLOCATE(tempDistx(NOUT),tempDisty(NOUT))
+  ALLOCATE(tempP1(NOUT,DIM),tempP2(NOUT,DIM))
+
+!      dgradx = (feval(obj.fd,[p(ix,1)+deps,p(ix,2)],obj,[])...%,1)...
+!                -d(ix))/deps; % Numerical
+  tempP1 = PointsOUT 
+  tempP1(:,1) = tempP1(:,1) + DEPS 
+  CALL CalcSignedDistance(tempP1,PSLG,tempDistx) 
+  dgradx= (tempDistx - DistOut(1:NOUT))/DEPS 
+
+!      dgrady = (feval(obj.fd,[p(ix,1),p(ix,2)+deps],obj,[])...%,1)...
+!                -d(ix))/deps; % gradient
+  tempP2 = PointsOUT 
+  tempP2(:,2) = tempP1(:,2) + DEPS 
+  CALL CalcSignedDistance(tempP2,PSLG,tempDisty) 
+  dgrady= (tempDisty - DistOut(1:NOUT))/DEPS 
+
+!      dgrad2 = dgradx.^+2 + dgrady.^+2;
+!      p(ix,:) = p(ix,:)-[d(ix).*dgradx./dgrad2,...
+!                         d(ix).*dgrady./dgrad2];
+  dgrad2 = dgradx**2 + dgrady**2 
+  NOUT=0
+  DO I =1,NP 
+    IF(IsOut(I).EQV..TRUE.) THEN
+      NOUT=NOUT+1
+      POINTS(I,1) = POINTS(I,1) - Dist(I)*dgradx(NOUT)/dgrad2(NOUT)
+      POINTS(I,2) = POINTS(I,2) - Dist(I)*dgrady(NOUT)/dgrad2(NOUT) 
+    ENDIF
+  ENDDO
+
+ENDIF
+
+! RELEASE ALLOCATABLES 
+DEALLOCATE(Dist)
+DEALLOCATE(dgradx,dgrady,dgrad2)
+DEALLOCATE(tempDistx,tempDisty) 
+DEALLOCATE(tempP1,tempP2)
+
+END SUBROUTINE 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
 SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -206,19 +294,62 @@ ALLOCATE(FVEC(NUMBARS,2))
 FORCES=0.0d0
 DO I = 1,NUMBARS
   BARVEC(I,:)=POINTS(bars(I,1),:) - POINTS(bars(I,2),:)
-  L(I)=SQRT(BARVEC(I,1)**2 + BARVEC(I,2)**2)
+  L(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
   midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   HBARS(I)=HFX(midpt)
 ENDDO 
+
 a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
 SCALE_FACTOR = a/b 
+
 DO I = 1,NUMBARS
   L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
   LN(I)=L(I)/L0(I)
-  FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+  ! Bossens Heckbert 
+  !FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+  ! Linear spring (Hooke's Law)
+  FORCES(I)=MAXVAL( (/1.0d0-LN(I),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
+
+!OPEN(UNIT=300,FILE="BARVEC.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  WRITE(300,"(2F16.8)") BARVEC(I,1),BARVEC(I,2)
+!ENDDO
+!CLOSE(300)
+!
+!OPEN(UNIT=300,FILE="L.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),L(I)
+!ENDDO
+!CLOSE(300)
+!
+!
+!OPEN(UNIT=300,FILE="LN.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),LN(I)
+!ENDDO
+!CLOSE(300)
+!
+!OPEN(UNIT=300,FILE="HBARS.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),HBARS(I)
+!ENDDO
+!CLOSE(300)
+!
+!
+!OPEN(UNIT=300,FILE="FORCES.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),FORCES(I)
+!ENDDO
+!CLOSE(300)
+!
+!stop
 
 END SUBROUTINE CalcForces
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -245,7 +376,7 @@ INTEGER(idx_t),INTENT(OUT) :: NumBars
 INTEGER(idx_t) :: i,k,temp
 INTEGER(idx_t) :: junkShort(2) 
 INTEGER(8)     :: junkLong 
-INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:),tmpB3(:)
+INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:)
 
 ! 1. Determine non unique edges of mesh 
 ALLOCATE(BARS(3*NF,2))
@@ -315,7 +446,7 @@ ENDDO
 END SUBROUTINE findUniqueBars 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE WriteMesh(DIM,POINTS,NP,FACETS,NF)
+SUBROUTINE WriteMesh(DIM,POINTS,NP,FACETS,NF,ITER)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Write the mesh to disk 
@@ -326,28 +457,30 @@ implicit none
 ! INPUT 
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:) 
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACETS(:,:) 
-INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM 
+INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM,ITER
 
 ! OUTPUT 
 ! WRITES SEVERAL TEXT FILES WITH POINTS AND FACETS 
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
+CHARACTER(14) :: filename
 
 IF(DIM.EQ.2) THEN 
+  WRITE(filename,'(a,i4.4,a)') "POINTS",ITER,".TXT"
   ! 2D VISUALIZATION GOES HERE 
-  OPEN(UNIT=300,FILE="Points.txt",ACTION='WRITE')
+  OPEN(UNIT=300,FILE=filename,ACTION='WRITE')
   DO i=1,NP
     WRITE(300,"(2F16.8)")POINTS(i,1),POINTS(i,2)
   ENDDO
   CLOSE(300)
   
-  OPEN(UNIT=301,FILE="Facets.txt",ACTION='WRITE')
+  WRITE(filename,'(a,i4.4,a)') "FACETS",ITER,".TXT"
+  OPEN(UNIT=301,FILE=filename,ACTION='WRITE')
   DO i=1,NF
     WRITE(301,"(3I8)")FACETS(i,1),FACETS(i,2),FACETS(i,3)
   ENDDO
   CLOSE(301)
-
 ELSE 
 
     ! 3D VISUALIZATION GOES HERE 
@@ -474,7 +607,7 @@ temp(nout,1)=PSLG%Vert(nx,1)
 
 !! NEED TO TEST MULTIPLY CONNECTED POLYGONS
 !!! debug 
-!OPEN(UNIT=303,FILE="debug.txt",ACTION='WRITE')
+!OPEN(UNIT=303,FILE="DensifiedPSLG.txt",ACTION='WRITE')
 !do i = 1,nout 
 !  WRITE(303,"(2F12.8)")temp(i,1),temp(i,2)
 !ENDDO
@@ -515,11 +648,10 @@ REAL(real_t),ALLOCATABLE :: yg(:,:)
 REAL(real_t),ALLOCATABLE :: Dist(:)
 REAL(real_t),ALLOCATABLE :: R0(:)
 REAL(real_t)             :: H
-REAL(real_t)             :: a,b,c
-REAL(real_t)             :: temp,junk
+REAL(real_t)             :: a,b
+REAL(real_t)             :: temp
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
-LOGICAL,ALLOCATABLE      :: keep(:)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 1. Create initial distribution in bounding box (equilateral triangles)
@@ -731,7 +863,7 @@ TYPE(kdtree2), POINTER :: TREE=>null()
 TYPE(kdtree2_result),ALLOCATABLE :: KDRESULTS(:)
 INTEGER(kind=idx_t) :: tempSZ
 INTEGER(kind=idx_t) :: INoOUT
-INTEGER(kind=idx_t) :: I,J,K
+INTEGER(kind=idx_t) :: I
 
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
@@ -747,6 +879,7 @@ INoOUT = -999
 ! Does it matter?
 
 DO I =1,tempSZ
+   
   call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1,results=KDRESULTS)
 
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
@@ -803,6 +936,7 @@ SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! calls qhull library from fortran language to output facet table of delaunay triangulation 
+! removes triangles with centroids outside of the PSLG 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 use iso_c_binding, only : c_f_pointer,C_PTR
@@ -874,7 +1008,7 @@ END SUBROUTINE DelTriaWElim
 SUBROUTINE CalcBaryCenter(DIM,POINTS,NP,FACES,NF,CENTROIDS)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!Calculate the centroid of the triangles described in the arrays POINTS FACES
+! Calculate the centroid of the triangles described in the arrays POINTS FACES
 ! For triangles: 
 ! centroids = (p(t(:,1),:)+p(t(:,2),:)+p(t(:,3),:))/3;
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1102,21 +1236,26 @@ REAL(real_t) :: median
 
 ! LOCALS 
 INTEGER(idx_t) :: lng
+REAL(real_t),ALLOCATABLE :: at(:)
 
-! 1. sort the numbers
-CALL quicksortREAL(a,first,last)
-
-! 2. If length is odd 
 lng = last - first + 1
 
+allocate(at(lng))
+at=a(first:last)
+
+! 1. sort the numbers
+CALL quicksortREAL(at,first,last)
+
+! 2. If length is odd 
 if(MOD(LNG,2).EQ.1) then
   ! then odd length vec
-  median = a(floor(lng/2.0d0)+1)
+  median = at(floor(lng/2.0d0)+1)
 else
   ! then even length vec
-  median = ( a((lng/2)+1) + a((lng/2)-1) )/2.0d0
+  median = ( at((lng/2)+1) + a((lng/2)-1) )/2.0d0
 endif
 
+deallocate(at)
 
 end function median
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
