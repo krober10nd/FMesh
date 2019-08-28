@@ -53,9 +53,9 @@ DO
   ENDIF
 
   ! 6. Move mesh points based on bar lengths L and forces F
-  CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FORCES)
+  CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 
-  CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FORCES) 
+  CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
   EXIT 
   
 

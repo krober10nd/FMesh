@@ -29,7 +29,7 @@ integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [dim+1 x nf] array 
 integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
 real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
-real(kind=real_t),allocatable   :: forces(:) ! [numbars x 1] array of spring forces on bars
+real(kind=real_t),allocatable   :: fvec(:,:) ! [numbars x 2] array of spring forces on bars
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
@@ -133,13 +133,11 @@ TYPE(C_PTR), INTENT(IN), VALUE :: p
 END SUBROUTINE destroy_storage
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-
 END INTERFACE
-
 
 CONTAINS 
 
-SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FORCES)
+SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Update vertex locations according to calc'ed forces. 
@@ -150,7 +148,7 @@ IMPLICIT NONE
 ! INPUTS 
 INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS 
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
-REAL(real_t),INTENT(IN),ALLOCATABLE :: FORCES(:)
+REAL(real_t),INTENT(IN),ALLOCATABLE :: FVEC(:,:)
 
 ! OUTPUTS 
 REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:) 
@@ -158,20 +156,18 @@ REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:)
 ! LOCAL 
 INTEGER(idx_t) :: I 
 
+DO I = 1,NUMBARS
+  POINTS(BARS(I,1),1) = POINTS(BARS(I,1),1) + DELTAT * FVEC(I,1)
+  POINTS(BARS(I,1),2) = POINTS(BARS(I,1),2) + DELTAT * FVEC(I,2)
 
-!     // move points
-!        for (int edge = 0; edge < edgeIndices.rows(); ++edge) {
-!            if (edgeIndices(edge, 0) >= fixedPoints.rows()) {
-!                points.row(edgeIndices(edge, 0)) += constants::deltaT * forceVector.row(edge);
-!            }
-!            if (edgeIndices(edge, 1) >= fixedPoints.rows()) {
-!                points.row(edgeIndices(edge, 1)) -= constants::deltaT * forceVector.row(edge);
-!            }
-!        }
+  POINTS(BARS(I,2),1) = POINTS(BARS(I,2),1) - DELTAT * FVEC(I,1)
+  POINTS(BARS(I,2),2) = POINTS(BARS(I,2),2) - DELTAT * FVEC(I,2)
+ENDDO
+
 END SUBROUTINE 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FORCES) 
+SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Calculate forcing terms for each nodes based on mesh size function 
@@ -187,14 +183,15 @@ INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 
 ! OUTPUTS
-REAL(real_t),INTENT(OUT),ALLOCATABLE :: FORCES(:) 
+REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
 REAL(real_t)   :: barvec(NUMBARS,DIM)
 REAL(real_t)   :: L(NUMBARS),L0(NUMBARS),LN(NUMBARS)
+REAL(real_t)   :: FORCES(NUMBARS)
 REAL(real_t)   :: HBARS(NUMBARS)
-REAL(real_t)   :: midpt(2),a,b
+REAL(real_t)   :: midpt(2),a,b,SCALE_FACTOR
 
 !barvec=p(bars(:,1),:)-p(bars(:,2),:); % List of bar vectors
 !L=sqrt(sum(barvec.^2,2)); % L = Bar lengths
@@ -202,7 +199,10 @@ REAL(real_t)   :: midpt(2),a,b
 !L0=hbars*Fscale*median(L)/median(HBARS); ! From Roberts et al. 2019
 !LN = L./L0;  
 !F    = (1-LN.^4).*exp(-LN.^4)./LN; % Bossens-Heckbert edge force
-ALLOCATE(FORCES(NUMBARS))
+!Fvec = F*[1,1].*barvec;
+
+ALLOCATE(FVEC(NUMBARS,2))
+
 FORCES=0.0d0
 DO I = 1,NUMBARS
   BARVEC(I,:)=POINTS(bars(I,1),:) - POINTS(bars(I,2),:)
@@ -211,10 +211,13 @@ DO I = 1,NUMBARS
   HBARS(I)=HFX(midpt)
 ENDDO 
 a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
+SCALE_FACTOR = a/b 
 DO I = 1,NUMBARS
-  L0(I)=HBARS(I)*FSCALE*a/b
+  L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
   LN(I)=L(I)/L0(I)
   FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+  FVEC(I,1)=FORCES(I)*BARVEC(I,1)
+  FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
 
 END SUBROUTINE CalcForces
@@ -225,6 +228,8 @@ SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Find the unique edges of the triangulation 
+! bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])];         % Interior bars duplicated
+! bars=unique(sort(bars,2),'rows');      
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
