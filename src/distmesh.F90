@@ -18,8 +18,8 @@ INTEGER I
 REAL(8) :: TS,TF,T1,T2
 
 DIM = 2 ! 2 DIMENIONS 
-LMIN=0.05 ! MINIMUM ELEMENT SIZE 
-MaxIter = 50 ! MAXIMUM NUMBER OF ITERATIONS
+LMIN=0.004 ! MINIMUM ELEMENT SIZE 
+MaxIter = 100 ! MAXIMUM NUMBER OF ITERATIONS
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -37,45 +37,29 @@ DO ! distmesh loop
 
   CALL CPU_TIME(TS) 
 
-  CALL CPU_TIME(T1)
   CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)      
-  CALL CPU_TIME(T2)
-
-  print *, "DELTRAI ", T2-T1
 
   PointsOld(1:NP,:)=Points(1:NP,1:DIM)
 
   ! 4. Describe each bar by a unique pair of nodes
-  CALL CPU_TIME(T1) 
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
-  CALL CPU_TIME(T2) 
-  print *, "FINDBARS ",T2-T1
 
   ! 5. Output of the current mesh
-  IF(MOD(ITER,10).EQ.0) THEN
+  IF(MOD(ITER,5).EQ.0) THEN
     CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
   ENDIF
 
   ! 6. Calculate forces on bars
-  CALL CPU_TIME(T1)
   CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
-  CALL CPU_TIME(T2) 
-  print *, "CalcForces ",T2-T1
 
   ! 7. Move points based on forces
-  CALL CPU_TIME(T1)
   CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
-  CALL CPU_TIME(T2)
-  print *, "ApplyForces ",T2-T1
 
   ! 8. Bring outside points back to the boundary
-  CALL CPU_TIME(T1)
   CALL ProjectPointsBack(DIM,PSLG,POINTS,NP)
-  CALL CPU_TIME(T2)
-  print *, "ProjectPointsBack ",T2-T1
   
-  WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE!"
   ITER = ITER + 1 
+  WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
 
   CALL CPU_TIME(TF) 
   print *, (TF-TS)

@@ -51,8 +51,10 @@ INTEGER(kind=idx_t) :: iter,MaxIter
 ! 2D domain boundary description 
 TYPE BounDescrip2D
    INTEGER(kind=idx_t) :: NumVert
+   INTEGER(kind=idx_t) :: NumVert0
    INTEGER(kind=idx_t) :: DIM
-   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)
+   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)  ! densified poly
+   REAL(kind=real_t),ALLOCATABLE :: Vert0(:,:) ! org. poly
 ENDTYPE
 
 TYPE(BounDescrip2D) :: PSLG 
@@ -306,9 +308,9 @@ DO I = 1,NUMBARS
   L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
   LN(I)=L(I)/L0(I)
   ! Bossens Heckbert 
-  !FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+  FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
   ! Linear spring (Hooke's Law)
-  FORCES(I)=MAXVAL( (/1.0d0-LN(I),0.0d0/))
+  !FORCES(I)=MAXVAL( (/1.0d0-LN(I),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
@@ -612,7 +614,9 @@ temp(nout,1)=PSLG%Vert(nx,1)
 !  WRITE(303,"(2F12.8)")temp(i,1),temp(i,2)
 !ENDDO
 !CLOSE(303)
-
+ALLOCATE(PSLG%Vert0(PSLG%NumVert,PSLG%DIM))
+PSLG%Vert0 = PSLG%Vert
+PSLG%NumVert0 = PSLG%NumVert 
 DEALLOCATE(PSLG%Vert)
 ALLOCATE(PSLG%Vert(NOUT,PSLG%DIM))
 PSLG%Vert = temp 
@@ -864,6 +868,7 @@ TYPE(kdtree2_result),ALLOCATABLE :: KDRESULTS(:)
 INTEGER(kind=idx_t) :: tempSZ
 INTEGER(kind=idx_t) :: INoOUT
 INTEGER(kind=idx_t) :: I
+REAL(real_t) :: t1,t2
 
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
@@ -874,9 +879,10 @@ ALLOCATE(SignedDistance(tempSZ))
 ALLOCATE(KDRESULTS(1)) 
 INoOUT = -999
 
-! can we call the kdtree through a vector? No
-! can we call fpnpoly with a bunch of queries and only do the call once?
-! Does it matter?
+! For every point we compute the distance to every point in the PSLG 
+CALL CPU_TIME(T1)
+
+!$OMP DO
 
 DO I =1,tempSZ
    
@@ -893,6 +899,10 @@ DO I =1,tempSZ
 
 ENDDO
 
+!$OMP END DO
+
+CALL CPU_TIME(T2)
+
 call kdtree2_destroy(tp=tree)
 
 DEALLOCATE(KDRESULTS)
@@ -908,6 +918,7 @@ DEALLOCATE(KDRESULTS)
 
 END SUBROUTINE CalcSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
 
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -926,7 +937,7 @@ REAL(kind=real_t), INTENT(IN) :: TEST(2)
 INTEGER(kind=idx_t),INTENT(OUT) :: INoOUT 
 
 !FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
-INoOUT = pnpoly(PSLG%NumVert, PSLG%Vert(:,1), PSLG%Vert(:,2), &
+INoOUT = pnpoly(PSLG%NumVert0, PSLG%Vert0(:,1), PSLG%Vert0(:,2), &
                 TEST(1),TEST(2))
 
 END SUBROUTINE 
