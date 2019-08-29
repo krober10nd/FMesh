@@ -74,7 +74,7 @@ DEST_ROOT = dest
 DEST = $(DEST_ROOT)/$(CONFIG)/$(OPT)
 
 # Directory for compiled executables.
-BIN_DIR = ../
+BIN_DIR = ..
 
 # Directory for compiled libraries.
 LIB_DIR = lib

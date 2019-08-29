@@ -159,31 +159,37 @@ REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:)
 INTEGER(idx_t) :: I
 INTEGER(idx_t) :: NOUT
 REAL(real_t),ALLOCATABLE :: Dist(:)
-LOGICAL        :: IsOut(NP) 
 REAL(real_t),ALLOCATABLE :: dgradx(:),dgrady(:),dgrad2(:)
 REAL(real_t),ALLOCATABLE :: tempDistx(:),tempDisty(:)
 REAL(real_t),ALLOCATABLE :: tempP1(:,:),tempP2(:,:)
-REAL(real_t) :: PointsOut(NP,DIM),DistOut(NP)
+REAL(real_t),ALLOCATABLE :: PointsOut(:,:),DistOut(:)
+INTEGER(idx_t),ALLOCATABLE :: INoOUT(:) 
 
 DEPS = SQRT(EPSILON(1.d0)) 
 
 !  %7. Bring outside points back to the boundary
 !  d = feval(obj.fd,p,obj,[],1); ix = d > 0;                  % Find points outside (d>0)
-CALL CalcSignedDistance(POINTS,PSLG,Dist) 
+ALLOCATE(INoOUT(NP)) 
+INoOUT = 0
+DO I = 1,NP 
+  CALL FPNPOLY(PSLG,POINTS(I,:),INoOUT(I))
+ENDDO
 
 NOUT=0
-IsOut=.FALSE.; PointsOut=-99999.d0 ; DistOut=-9999.d0
+ALLOCATE(PointsOut(NP,DIM),DistOut(NP))
+PointsOut=-99999.d0 
+DistOut=-9999.d0
 DO I=1,NP 
-  IF(Dist(I).GT.0) THEN 
+  IF(INoOUT(I).EQ.0) THEN 
     NOUT=NOUT+1
-    IsOut(I) = .TRUE.
     PointsOut(NOUT,:) = Points(I,:)
-    DistOut(NOUT)=Dist(I)
   ENDIF
 ENDDO
 
 !  if sum(ix) > 0
 IF(NOUT.GT.0) THEN  
+
+  CALL CalcSignedDistance(PointsOut,PSLG,DistOut) 
 
   ALLOCATE(dgradx(NOUT),dgrady(NOUT),dgrad2(NOUT))
   ALLOCATE(tempDistx(NOUT),tempDisty(NOUT))
@@ -209,17 +215,17 @@ IF(NOUT.GT.0) THEN
   dgrad2 = dgradx**2 + dgrady**2 
   NOUT=0
   DO I =1,NP 
-    IF(IsOut(I).EQV..TRUE.) THEN
+    IF(INoOUT(I).EQ.0) THEN
       NOUT=NOUT+1
-      POINTS(I,1) = POINTS(I,1) - Dist(I)*dgradx(NOUT)/dgrad2(NOUT)
-      POINTS(I,2) = POINTS(I,2) - Dist(I)*dgrady(NOUT)/dgrad2(NOUT) 
+      POINTS(I,1) = POINTS(I,1) - DistOut(NOUT)*dgradx(NOUT)/dgrad2(NOUT)
+      POINTS(I,2) = POINTS(I,2) - DistOut(NOUT)*dgrady(NOUT)/dgrad2(NOUT) 
     ENDIF
   ENDDO
 
 ENDIF
 
 ! RELEASE ALLOCATABLES 
-DEALLOCATE(Dist)
+DEALLOCATE(DistOut,PointsOut)
 DEALLOCATE(dgradx,dgrady,dgrad2)
 DEALLOCATE(tempDistx,tempDisty) 
 DEALLOCATE(tempP1,tempP2)
@@ -314,44 +320,6 @@ DO I = 1,NUMBARS
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
-
-!OPEN(UNIT=300,FILE="BARVEC.txt",ACTION='WRITE')
-!DO i=1,NumBars
-!  WRITE(300,"(2F16.8)") BARVEC(I,1),BARVEC(I,2)
-!ENDDO
-!CLOSE(300)
-!
-!OPEN(UNIT=300,FILE="L.txt",ACTION='WRITE')
-!DO i=1,NumBars
-!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),L(I)
-!ENDDO
-!CLOSE(300)
-!
-!
-!OPEN(UNIT=300,FILE="LN.txt",ACTION='WRITE')
-!DO i=1,NumBars
-!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),LN(I)
-!ENDDO
-!CLOSE(300)
-!
-!OPEN(UNIT=300,FILE="HBARS.txt",ACTION='WRITE')
-!DO i=1,NumBars
-!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),HBARS(I)
-!ENDDO
-!CLOSE(300)
-!
-!
-!OPEN(UNIT=300,FILE="FORCES.txt",ACTION='WRITE')
-!DO i=1,NumBars
-!  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-!  WRITE(300,"(3F16.8)") midpt(1),midpt(2),FORCES(I)
-!ENDDO
-!CLOSE(300)
-!
-!stop
 
 END SUBROUTINE CalcForces
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -649,7 +617,8 @@ INTEGER(idx_t),INTENT(OUT) :: NP
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
-REAL(real_t),ALLOCATABLE :: Dist(:)
+!REAL(real_t),ALLOCATABLE :: Dist(:)
+INTEGER(idx_t),ALLOCATABLE:: INoOUT(:) 
 REAL(real_t),ALLOCATABLE :: R0(:)
 REAL(real_t)             :: H
 REAL(real_t)             :: a,b
@@ -716,6 +685,7 @@ DO I = 1,NY
   ENDDO
 ENDDO
 
+
 ! 2. Remove points outside the region, apply the rejection method
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! p=p(feval(fd,p,varargin{:})<geps,:);                 % Keep only d<0 points.
@@ -723,19 +693,27 @@ ENDDO
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);                % Rejection method.
 ! N=size(p,1);                                         % Number of initial points.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-CALL CalcSignedDistance(IPTS,PSLG,Dist) 
+!  Can we just call inpoly instead?
+!CALL CalcSignedDistance(IPTS,PSLG,Dist) 
+ALLOCATE(INoOUT(NP)) 
+INoOUT = 0
+DO I = 1,NP 
+  CALL FPNPOLY(PSLG,IPTS(I,:),INoOUT(I))
+ENDDO
 
-GEPS = 0.01d0 * LMIN  ! this is how it was in DistMesh
+!GEPS = 0.01d0 * LMIN  ! this is how it was in DistMesh
 
 ! Remove points with dist > geps (mark them)
 DO I = 1,NP
-  IF(Dist(I).GT.GEPS) THEN 
+!  IF(Dist(I).GT.GEPS) THEN 
+  IF(INoOUT(I).EQ.0) THEN 
     IPTS(I,1) = -9999.d0
     IPTS(I,2) = -9999.d0
   ENDIF
 ENDDO
 
-DEALLOCATE(DIST,XG,YG,XVEC,YVEC) 
+!DEALLOCATE(DIST,XG,YG,XVEC,YVEC) 
+DEALLOCATE(INoOUT,XG,YG,XVEC,YVEC) 
 
 ! push them to the back of the array
 CALL PushZerosToBackREAL(IPTS,NP)
@@ -757,6 +735,8 @@ DO I = 1,NP
 ENDDO
 
 CALL PushZerosToBackREAL(IPTS,NP)
+
+print *, NP 
 
 END SUBROUTINE FormInitialPoints2D
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -853,6 +833,7 @@ SUBROUTINE CalcSignedDistance(IPTS,PSLG,SignedDistance)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 use kdtree2_module
+USE OMP_LIB
 implicit none 
 
 ! INPUTS 
@@ -868,7 +849,10 @@ TYPE(kdtree2_result),ALLOCATABLE :: KDRESULTS(:)
 INTEGER(kind=idx_t) :: tempSZ
 INTEGER(kind=idx_t) :: INoOUT
 INTEGER(kind=idx_t) :: I
+integer :: nthread,myid  
 REAL(real_t) :: t1,t2
+
+! For every point we compute the distance to every point in the PSLG 
 
 ! BUILD KD-TREE with PSLG vertices
 tree => kdtree2_create(TRANSPOSE(PSLG%Vert),rearrange=.true.,sort=.true.)
@@ -879,29 +863,15 @@ ALLOCATE(SignedDistance(tempSZ))
 ALLOCATE(KDRESULTS(1)) 
 INoOUT = -999
 
-! For every point we compute the distance to every point in the PSLG 
-CALL CPU_TIME(T1)
-
-!$OMP DO
-
 DO I =1,tempSZ
-   
   call kdtree2_n_nearest(tp=tree,qv=IPTS(I,:),nn=1,results=KDRESULTS)
-
   SignedDistance(I) = SQRT(KDRESULTS(1)%DIS)
-
   !! Determine if point is in the PSLG defined polygon
   CALL FPNPOLY(PSLG,IPTS(I,:),INoOUT)
-  
   IF(INoOUT.EQ.1) THEN 
     SignedDistance(I)= -SignedDistance(I)
   ENDIF
-
 ENDDO
-
-!$OMP END DO
-
-CALL CPU_TIME(T2)
 
 call kdtree2_destroy(tp=tree)
 
@@ -969,15 +939,15 @@ INTEGER(kind=idx_t) :: INoOUT
 type(c_ptr) :: cfacetemp
 integer(kind=idx_t),pointer :: ffacetemp(:)
 real(real_t),allocatable :: CENTROIDS(:,:)
-real(real_t),allocatable :: tranTemp(:,:)
+real(8) :: blah1,blah2
 
 integer :: i,j,k
 
 ! call qhull library 
-allocate(tranTemp(DIM,NP))
-tranTemp = TRANSPOSE(POINTS)
-cfacetemp = faces(DIM,NP,tranTemp,NF)
-deallocate(tranTemp)
+CALL CPU_TIME(blah1) 
+cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
+CALL CPU_TIME(blah2) 
+print *, blah2 - blah1 
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 

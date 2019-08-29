@@ -1054,7 +1054,7 @@ contains
     endif
     sr%dimen = tp%dimen
 
-    call validate_query_storage(nn) 
+    !call validate_query_storage(nn) 
     sr%pq = pq_create(results)
 
     call search(tp%root)

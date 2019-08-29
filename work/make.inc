@@ -7,7 +7,7 @@
 # directory in which compiled objects are placed and to uniquely name binaries.
 
 CONFIG = gnu
-OPT = dbg
+OPT = opt
 
 #-----
 # Compiler configuration.
@@ -20,17 +20,17 @@ OPT = dbg
 # All C and C++ files are preprocessed and compiled in one step by the C and
 # C++ compilers, with CPPFLAGS passed to the C and C++ compilers.
 # NOTE: if you use cpp you will almost certainly have to provide the -C -P flags.
-CPP =
+CPP = 
 
 # Preprocessing flags
 # Used for *.F, *.F90, *.c and *.cpp files.
-CPPFLAGS = -I../include/libqhull_r
+CPPFLAGS = -I/usr/local/include/libqhull_r
 
 # --- Fortran ---
 # compiler
 FC = gfortran
 # compiler flags
-FFLAGS = -O3 # -Wall -Wextra -pedantic
+FFLAGS = -O3 -fopenmp # -Wall -Wextra -pedantic
 # flag to specify directory to put compiled .mod files (e.g. -module for ifort, -J for gfortran)
 F90_MOD_FLAG = -J
 
@@ -38,7 +38,7 @@ F90_MOD_FLAG = -J
 # compiler
 CC = gcc
 # compiler flags
-CFLAGS = -O3 #-Wall -Wextra -pedantic
+CFLAGS = -O3 -fopenmp #-Wall -Wextra -pedantic
 # Not all compilers (e.g. xlc) support -MM -MT that we require to produce the
 # C dependencies.  Fortunately there is (usually) a version of (e.g.) gcc
 # kicking around which does.  If CCD is defined, then use that to generate the
@@ -49,7 +49,7 @@ CCD =
 # compiler
 CXX = g++
 # compiler flags
-CXXFLAGS = -O3
+CXXFLAGS = -O3 -fopenmp
 # Not all compilers (e.g. xlc++) support -MM -MT that we require to produce the
 # C++ dependencies.  Fortunately there is (usually) a version of (e.g.) g++
 # kicking around which does.  If CXXD is defined, then use that to generate the
@@ -60,7 +60,7 @@ CXXD =
 # linker
 LD = gfortran
 # linker flags
-LDFLAGS = -L./../lib 
+LDFLAGS = -L/usr/local/lib -fopenmp
 # additional libraries to link to
 LIBS = -lqhullstatic_r
 

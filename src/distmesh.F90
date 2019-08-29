@@ -18,8 +18,8 @@ INTEGER I
 REAL(8) :: TS,TF,T1,T2
 
 DIM = 2 ! 2 DIMENIONS 
-LMIN=0.004 ! MINIMUM ELEMENT SIZE 
-MaxIter = 100 ! MAXIMUM NUMBER OF ITERATIONS
+LMIN=0.001 ! MINIMUM ELEMENT SIZE 
+MaxIter = 20 ! MAXIMUM NUMBER OF ITERATIONS
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -33,8 +33,8 @@ ITER = 0 ! iteration counter
 
 ALLOCATE(PointsOLD(NP,DIM)) 
 PointsOld = -9999.0d0                                       ! For the first iteration 
-DO ! distmesh loop
 
+DO ! distmesh loop
   CALL CPU_TIME(TS) 
 
   CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)      
@@ -45,9 +45,9 @@ DO ! distmesh loop
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
 
   ! 5. Output of the current mesh
-  IF(MOD(ITER,5).EQ.0) THEN
-    CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
-  ENDIF
+  !IF(MOD(ITER,5).EQ.0) THEN
+  !  CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
+  !ENDIF
 
   ! 6. Calculate forces on bars
   CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
@@ -60,9 +60,10 @@ DO ! distmesh loop
   
   ITER = ITER + 1 
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
+  WRITE(*,'(A,I9,A)') "INFO: MESH HAS ",NP," VERTICES." 
 
   CALL CPU_TIME(TF) 
-  print *, (TF-TS)
+  WRITE(*,'(A,F12.8)') "INFO: ELAPSED TIME IS: ",TF-TS 
    
   ! 9. Termination criterion: reached max iterations. 
   IF(ITER.EQ.MaxIter) THEN

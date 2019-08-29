@@ -8,7 +8,7 @@ contains
 FUNCTION MeshSize(POINTS) 
 real(kind=real_t):: MeshSize
 real(kind=real_t),intent(in) :: points(2)
-MeshSize = (1.0d0-points(1))*0.55d0 + 0.005d0
+MeshSize = minval((/0.0020d0,(1.0d0-points(1))*0.55d0 + 0.001d0/))
 END FUNCTION MeshSize
 
 end module YourMeshSize

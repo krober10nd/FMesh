@@ -5,9 +5,6 @@
 // These functions are called from FORTRAN via an interface in utils.F90
 
 
-
-
-
 // This function is designed to be called from fortran 
 // via the wrapper written in utils.F90  
 //
@@ -28,19 +25,7 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
 
    facetT *facet;            /* set by FORALLfacets */
    vertexT *vertex, **vertexp; 
-
-    QHULL_LIB_CHECK
   {
-    coordT points[DIM*NUMPOINTS]; /* array of coordinates for each point */
-
-    // put points in the coordT type.
-    // will have to check if this is absolutely necessary
-    for ( i=0 ; i < NUMPOINTS; i++) {
-       for ( j=0 ; j < DIM ; j++) {
-          points[i*DIM + j]  =fpoints[i*DIM + j];
-          }
-    }
-
     qhT qh_qh;                     /* Create an instance of Qhull */
     qhT *qh= &qh_qh;
     qh_zero(qh, errfile);
@@ -48,24 +33,12 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
     sprintf(flags, "qhull d Qt i");
 
     fflush(NULL);
-    exitcode= qh_new_qhull(qh, DIM, NUMPOINTS, points, ismalloc,
+    exitcode= qh_new_qhull(qh, DIM, NUMPOINTS, fpoints, ismalloc,
                     flags, outfile, errfile);
     fflush(NULL);
 
     if (!exitcode)
-      i=0;
-      // we only need the lower hull facets (Delaunay ones)
-      FORALLfacets { 
-          if( !facet->upperdelaunay) {
-            FOREACHvertex_(facet->vertices) {
-                i++;
-                }
-          }
-      } 
-
-      // allocate memory for the lower facets 
-      *NF = i/(DIM+1); 
-      tmp = (int*) malloc( sizeof(int)*(DIM+1)*(*NF) );
+      tmp = (int*) malloc( sizeof(int)*(DIM+1)*(2*NUMPOINTS) );
 
       i=0;
       // we only need the lower hull facets (Delaunay ones)
@@ -79,7 +52,8 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
             //printf("\n");
           }
       } 
-    //printf("FINISHED IN C");
+      *NF = i/(DIM+1); 
+      
 
     qh_freeqhull(qh, !qh_ALL);                 /* free long memory */
     qh_memfreeshort(qh, &curlong, &totlong);  /* free short memory and memory allocator */
