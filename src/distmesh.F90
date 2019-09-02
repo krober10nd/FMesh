@@ -14,7 +14,6 @@ USE utils
 
 IMPLICIT NONE
 
-INTEGER I 
 REAL(8) :: TS,TF
 MaxIter =100 ! MAXIMUM NUMBER OF ITERATIONS
 
@@ -24,7 +23,7 @@ CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Step 1-2: Create i
 
 CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)         ! Compute Delaunay triangulation of point set with masking
 
-CALL TriaToTria(NF,TRIAS,T2T,T2N)                               ! Calculate the triangle adj. matrix 
+CALL TriaToTria(NF,TRIAS,T2T,T2N)                           ! Calculate the triangle adj. matrix 
 
 STOP 
 
@@ -35,10 +34,11 @@ WRITE(*,'(A)') "                                      "
 ITER = 0 ! iteration counter 
 
 DO ! distmesh loop
+
   CALL CPU_TIME(TS) 
 
   ! Perform edge flips to achieve Del. hood
-  !CALL edgeFlips()  
+  !CALL edgeFlipper(DIM,NF,TRIAS,T2T,T2N)  
 
   ! 4. Describe each bar by a unique pair of nodes
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
@@ -75,6 +75,7 @@ ENDDO
 WRITE(*,'(A,I8,A,I8,A)')"INFO: " & 
 //" THE MESH HAS ",NP," VERTICES " &
 //" AND ",NF," FACES "
+
 CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
 
 !

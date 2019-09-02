@@ -1219,15 +1219,18 @@ SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_not
   integer(idx_t) ::triangle_order=3
   integer(idx_t),allocatable :: idx(:)
   integer(idx_t),allocatable :: col(:,:),tcol(:,:)
+  integer(idx_t) :: Nei(3), Cur(3)
   integer(idx_t) i
   integer(idx_t) icol
   integer(idx_t) j
   integer(idx_t) k
+  integer(idx_t) p,pp
   integer(idx_t) side1
   integer(idx_t) side2
   integer(idx_t) tri
   integer(idx_t) tri1
   integer(idx_t) tri2
+  logical :: found 
 
 !  Step 1.
 !  From the list of nodes for triangle T, of the form: (I,J,K)
@@ -1323,7 +1326,71 @@ SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_not
 
   end do
 
+  ! compute t2n 
+  !find(~ismember(t(t2t(j,k),:), t(j,:)))    % Should be = t2n(j,k)
+  allocate(triangle_NotSharedVertex(triangle_num,triangle_order)) 
+  
+  triangle_NotSharedVertex = -1 
+
+  do tri = 1,triangle_num
+    Cur(:) = triangle_node(tri,1:3) 
+    do k = 1,3 ! adj
+      if(triangle_neighbor(tri,k).eq.-1) cycle 
+      Nei(:) = triangle_node(triangle_neighbor(tri,k),1:3)
+
+      do p = 1,3
+        found=.false. 
+        do pp = 1,3 
+          if(Nei(p).eq.Cur(pp)) then
+            ! Nei and Curr share this vertex 
+            found=.true.
+          endif
+        enddo
+        ! if we haven't found this vertex yet, it must be *not shared*
+        if(found.eqv..false.) then 
+          triangle_notSharedVertex(tri,k) = p
+        endif
+      enddo
+
+    enddo
+  enddo
+
 END SUBROUTINE TriaToTria
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+recursive subroutine quicksortINT(a, first, last)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! quicksort.f -*-f90-*-
+! Author: t-nissie
+! License: GPLv3
+! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+  implicit none
+  integer(4)  a(*), x, t
+  integer first, last
+  integer i, j
+
+  x = a( (first+last) / 2 )
+  i = first
+  j = last
+  do
+     do while (a(i) < x)
+        i=i+1
+     end do
+     do while (x < a(j))
+        j=j-1
+     end do
+     if (i >= j) exit
+     t = a(i);  a(i) = a(j);  a(j) = t
+     i=i+1
+     j=j-1
+  end do
+  if (first < i-1) call quicksortINT(a, first, i-1)
+  if (j+1 < last)  call quicksortINT(a, j+1, last)
+end subroutine quicksortINT
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 recursive subroutine quicksortINTLONG(a, first, last,idx)
