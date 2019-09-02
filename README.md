@@ -32,4 +32,4 @@ It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boun
 -1.0 -1.0 <br /> 
 -1.0  1.0 <br /> 
 <br /> 
-It requires a text file that describes the mesh sizes in the domain (working on this). 
+It requires the user define their own mesh size function in the module src/YourMeshSizeFunction.F90. The mesh size function takes a vector of coordinates and returns a desired element size and orientation (i.e., anisotropic) In the simplest case, you can simply write a function to return only a element size (isotropic). 
