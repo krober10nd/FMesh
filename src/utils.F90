@@ -25,7 +25,8 @@ implicit none
 #endif
 
 ! Later on this should become a derived type 
-integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [dim+1 x nf] array of point indices 
+integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [nf x dim+1] array of point indices 
+integer(kind=idx_t),allocatable :: t2t(:,:)  ! triangle-to-triangle neighbors [nf x dim+1] of connected trias
 integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
 real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
@@ -34,8 +35,6 @@ integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
 
-INTEGER(kind=idx_t) :: DIM ! dimension of problem
-REAL(kind=real_t)   :: LMIN ! minimum mesh size 
 REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
 
 ! some parameters for distmesh
@@ -325,6 +324,53 @@ END SUBROUTINE CalcForces
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 
+SUBROUTINE sortRows(NumRows,ROWS,IDX) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Given an array of int indices (i.e., a ROW), sort the ROW in ascending 
+! lexiographic  order and return the mapping to achieve the sorted ROWS array.  
+! assumes the ROWS are the first two columns of the array ROWS (i.e., ROWS(:,1:2)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+implicit none 
+
+! INPUT 
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: ROWS(:,:)
+INTEGER(idx_t),INTENT(IN) :: NumRows
+
+! OUTPUT 
+INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: IDX(:)
+
+! LOCAL 
+INTEGER(idx_t) :: i,k,temp
+INTEGER(idx_t) :: junkShort(2) 
+INTEGER(8)     :: junkLong 
+INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:)
+INTEGER(idx_t),ALLOCATABLE :: tROWS(:,:)
+
+ALLOCATE(tROWS(SIZE(ROWS,1),SIZE(ROWS,2)))
+tROWS = ROWS
+
+ALLOCATE(tmpB1(NumROWS)) 
+
+! 2. Convert to unique integer number
+DO I = 1,NumRows
+  tmpB1(I) = TRANSFER((/tROWS(I,1),tROWS(I,2)/),junkLONG)  
+ENDDO
+
+! 3. Apply sorting method to sort in ascending order 
+! need the array idx which maps the sort 
+allocate(idx(numrows))
+! original indexing 
+do i =1,numRows
+  idx(i) = i
+enddo
+CALL quickSortINTLONG(tmpB1,1,NumROWS,idx) 
+
+END SUBROUTINE sortRows
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
 SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS) 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -347,6 +393,7 @@ INTEGER(idx_t) :: i,k,temp
 INTEGER(idx_t) :: junkShort(2) 
 INTEGER(8)     :: junkLong 
 INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:)
+INTEGER(idx_t),ALLOCATABLE :: idx(:)
 
 ! 1. Determine non unique edges of mesh 
 ALLOCATE(BARS(3*NF,2))
@@ -380,13 +427,15 @@ ENDDO
 
 ALLOCATE(tmpB1(NumBars)) 
 
-! 3. Convert to unique integer numbers using bitwise shift op
+! 3. Convert to unique integer number
 DO I = 1,NumBars
   tmpB1(I) = TRANSFER((/BARS(I,1),BARS(I,2)/),junkLONG)  
 ENDDO
 
 ! 4. Apply sorting method to sort in ascending order 
-CALL quickSortINTLONG(tmpB1,1,NumBars) 
+allocate(idx(numbars))
+CALL quickSortINTLONG(tmpB1,1,NumBars,idx) 
+deallocate(idx)
 
 ALLOCATE(tmpB2(NumBars))
 tmpB2=0
@@ -947,7 +996,7 @@ integer :: i,j,k
 CALL CPU_TIME(blah1) 
 cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
 CALL CPU_TIME(blah2) 
-print *, blah2 - blah1 
+!print *, blah2 - blah1 
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 
@@ -1130,7 +1179,153 @@ end if
 END FUNCTION
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-recursive subroutine quicksortINTLONG(a, first, last)
+SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_notsharedvertex )
+
+!*****************************************************************************80
+!
+!! TriaToTria determines triangle neighbors in a mesh (triangle_neighbor)
+!  and the vertex index (in the neighbor triangle) not on the shared edge
+!  between a given triangle and its neighbor (triangle_notsharedvertex)
+!
+! THIS CODE HAS BEEN ADAPTED FROM:
+! https://people.sc.fsu.edu/~jburkardt/f_src/triangulation_triangle_neighbors/triangulation_triangle_neighbors.html
+!  Licensing:
+!
+!    This code is distributed under the GNU LGPL license.
+!
+!  Last Modified:
+!
+!    1 September 2019
+!
+!  Author:
+!
+!    John Burkardt
+!  
+!  Adapated/Modified by: 
+! 
+!    Keith Roberts 
+  implicit none
+
+  ! INPUTS 
+  integer(idx_t),intent(in)::triangle_num
+  integer(idx_t),intent(in),ALLOCATABLE::triangle_node(:,:)
+
+  ! OUTPUTS 
+  integer(idx_t),intent(out),ALLOCATABLE::triangle_neighbor(:,:)
+  integer(idx_t),intent(out),ALLOCATABLE::triangle_notsharedvertex(:,:)
+
+  ! LOCALS
+  integer(idx_t) ::triangle_order=3
+  integer(idx_t),allocatable :: idx(:)
+  integer(idx_t),allocatable :: col(:,:),tcol(:,:)
+  integer(idx_t) i
+  integer(idx_t) icol
+  integer(idx_t) j
+  integer(idx_t) k
+  integer(idx_t) side1
+  integer(idx_t) side2
+  integer(idx_t) tri
+  integer(idx_t) tri1
+  integer(idx_t) tri2
+
+!  Step 1.
+!  From the list of nodes for triangle T, of the form: (I,J,K)
+!  construct the three neighbor relations:
+!
+!    (I,J,3,T) or (J,I,3,T),
+!    (J,K,1,T) or (K,J,1,T),
+!    (K,I,2,T) or (I,K,2,T)
+!
+!  where we choose (I,J,1,T) if I < J, or else (J,I,1,T)
+!
+  allocate(col(3*triangle_num,4))
+  allocate(tcol(3*triangle_num,4))
+
+  do tri = 1, triangle_num
+
+    i = triangle_node(tri,1)
+    j = triangle_node(tri,2)
+    k = triangle_node(tri,3)
+
+    if ( i < j ) then
+      col(3*(tri-1)+1,1:4) = (/ i, j, 3, tri /)
+    else
+      col(3*(tri-1)+1,1:4) = (/ j, i, 3, tri /)
+    end if
+
+    if ( j < k ) then
+      col(3*(tri-1)+2,1:4) = (/ j, k, 1, tri /)
+    else
+      col(3*(tri-1)+2,1:4) = (/ k, j, 1, tri /)
+    end if
+
+    if ( k < i ) then
+      col(3*(tri-1)+3,1:4) = (/ k, i, 2, tri /)
+    else
+      col(3*(tri-1)+3,1:4) = (/ i, k, 2, tri /)
+    end if
+
+  end do
+!
+!  Step 2. Perform an ascending dictionary sort on the neighbor relations.
+!  We only intend to sort on rows 1 and 2; the routine we call here
+!  sorts on rows 1 through 4 but that won't hurt us.
+!
+!  What we need is to find cases where two triangles share an edge.
+!  Say they share an edge defined by the nodes I and J.  Then there are
+!  two columns of COL that start out ( I, J, ?, ? ).  By sorting COL,
+!  we make sure that these two columns occur consecutively.  That will
+!  make it easy to notice that the triangles are neighbors.
+!
+! Sort the COL array 
+  call sortRows(3*Triangle_num,col,IDX) 
+
+  ! Sort the COL array 
+  tCOL=0
+  DO I = 1, 3*Triangle_num
+    tCOL(I,1:4) = COL(IDX(I),1:4) 
+  ENDDO
+  COL = tCOL 
+  deallocate(tCOL)
+
+!
+!  Step 3. Neighboring triangles show up as consecutive columns with
+!  identical first two entries.  Whenever you spot this happening,
+!  make the appropriate entries in TRIANGLE_NEIGHBOR.
+!
+  allocate(triangle_neighbor(triangle_num,triangle_order))
+
+  triangle_neighbor = -1 
+
+  icol = 1
+
+  do
+
+    if ( 3 * triangle_num <= icol ) then
+      exit
+    end if
+
+    if ( col(icol,1) /= col(icol+1,1) .or. col(icol,2) /= col(icol+1,2) ) then
+      icol = icol + 1
+      cycle
+    end if
+
+    side1 = col(icol,3)
+    tri1 = col(icol,4)
+    side2 = col(icol+1,3)
+    tri2 = col(icol+1,4)
+
+    triangle_neighbor(tri1,side1) = tri2
+    triangle_neighbor(tri2,side2) = tri1
+
+    icol = icol + 2
+
+  end do
+
+END SUBROUTINE TriaToTria
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+recursive subroutine quicksortINTLONG(a, first, last,idx)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! quicksort.f -*-f90-*-
@@ -1143,6 +1338,7 @@ recursive subroutine quicksortINTLONG(a, first, last)
   implicit none
   integer(8)  a(*), x, t
   integer first, last
+  integer(idx_t),intent(inout),allocatable :: idx(:)
   integer i, j
 
   x = a( (first+last) / 2 )
@@ -1157,11 +1353,12 @@ recursive subroutine quicksortINTLONG(a, first, last)
      end do
      if (i >= j) exit
      t = a(i);  a(i) = a(j);  a(j) = t
+     t = idx(i);idx(i) = idx(j); idx(j) = t ! save the sort map
      i=i+1
      j=j-1
   end do
-  if (first < i-1) call quicksortINTLONG(a, first, i-1)
-  if (j+1 < last)  call quicksortINTLONG(a, j+1, last)
+  if (first < i-1) call quicksortINTLONG(a, first, i-1,idx)
+  if (j+1 < last)  call quicksortINTLONG(a, j+1, last,idx)
 end subroutine quicksortINTLONG
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
