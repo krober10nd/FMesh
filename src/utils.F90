@@ -27,6 +27,7 @@ implicit none
 ! Later on this should become a derived type 
 integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [nf x dim+1] array of point indices 
 integer(kind=idx_t),allocatable :: t2t(:,:)  ! triangle-to-triangle neighbors [nf x dim+1] of connected trias
+integer(kind=idx_t),allocatable :: t2n(:,:)  ! triangle-to-vertex neighbors [nf x dim+1] of connected trias (see TriaToTria)
 integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
 real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
 real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration

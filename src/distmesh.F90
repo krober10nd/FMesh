@@ -24,7 +24,7 @@ CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Step 1-2: Create i
 
 CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)         ! Compute Delaunay triangulation of point set with masking
 
-CALL TriaToTria(NF,TRIAS,T2T)                               ! Calculate the triangle adj. matrix 
+CALL TriaToTria(NF,TRIAS,T2T,T2N)                               ! Calculate the triangle adj. matrix 
 
 STOP 
 
