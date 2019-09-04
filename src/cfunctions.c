@@ -45,11 +45,9 @@ int *faces(int DIM, int NUMPOINTS, double *fpoints, int *NF) {
       FORALLfacets { 
           if( !facet->upperdelaunay) {
             FOREACHvertex_(facet->vertices) {
-                //printf(" %d", qh_pointid (qh, vertex->point) );
                 tmp[i]= qh_pointid (qh, vertex->point);
                 i++;
                 }
-            //printf("\n");
           }
       } 
       *NF = i/(DIM+1); 

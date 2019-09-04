@@ -45,7 +45,7 @@ MAIN = distmesh.F90
 
 # Name of source files (if any) which must be recompiled if any other source
 # files need to be recompiled.
-FORCE_REBUILD_FILES =  ./../thirdparty/kdtree2.f90 ./../src/cfunctions.c ./../src/utils.F90 ./../src/distmesh.F90 ./../src/YourMeshSize.F90
+FORCE_REBUILD_FILES =  ./../thirdparty/kdtree2.f90 ./../src/cfunctions.c ./../src/utils.F90 ./../src/distmesh.F90 ./../src/YourMeshSize.F90 ./../src/vars.F90
 
 # Allow files to be compiled into a program (MODE = program), or into a library
 # (MODE = library) or both (MODE = all).

@@ -1,5 +1,6 @@
 MODULE UTILS 
-use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
+use YourMeshSize
+use vars
 
 !**************************************************
 ! PROCEDURES FOR FMesh
@@ -11,56 +12,6 @@ use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
 
 implicit none
 
-! Width of elementary data types change directive in makefile please 
-#ifdef INT64
-    integer, parameter, public :: idx_t = c_int64_t ! <--- modify integer size here (c_int32_t or c_int64_t)
-#else
-    integer, parameter, public :: idx_t = c_int32_t
-#endif
-
-#ifdef REAL32
-   integer, parameter, public :: real_t = c_float  ! <--- modify real size here (c_float or c_double)
-#else
-    integer, parameter, public :: real_t = c_double
-#endif
-
-! Later on this should become a derived type 
-integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [nf x dim+1] array of point indices 
-integer(kind=idx_t),allocatable :: t2t(:,:)  ! triangle-to-triangle neighbors [nf x dim+1] of connected trias
-integer(kind=idx_t),allocatable :: t2n(:,:)  ! triangle-to-vertex neighbors [nf x dim+1] of connected trias (see TriaToTria)
-integer(kind=idx_t),allocatable :: bars(:,:)   ! unique bars of the triangulation
-real(kind=real_t),allocatable   :: points(:,:) !  [dim x np] array of points
-real(kind=real_t),allocatable   :: pointsOld(:,:) ! [dim x np] array of points from previous iteration
-real(kind=real_t),allocatable   :: fvec(:,:) ! [numbars x 2] array of spring forces on bars
-integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
-integer(kind=idx_t) :: NF    ! number of facets in mesh 
-integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
-
-REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
-
-! some parameters for distmesh
-REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
-REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
-REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
-REAL(kind=real_t),PARAMETER :: DELTAT=0.1d0
-REAL(kind=real_t) :: GEPS 
-REAL(kind=real_t) :: DEPS 
-REAL(kind=real_t),PARAMETER :: EPS=EPSILON(1.d0) 
-INTEGER(kind=idx_t) :: iter,MaxIter
-
-! 2D domain boundary description 
-TYPE BounDescrip2D
-   INTEGER(kind=idx_t) :: NumVert
-   INTEGER(kind=idx_t) :: NumVert0
-   INTEGER(kind=idx_t) :: DIM
-   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)  ! densified poly
-   REAL(kind=real_t),ALLOCATABLE :: Vert0(:,:) ! org. poly
-ENDTYPE
-
-TYPE(BounDescrip2D) :: PSLG 
-
-! error conditions 
-integer(kind=idx_t) :: ierr 
 
 ! AN ISOTROPIC MESH SIZE FUNCTION 
 ! this is defined by the user in YourMeshSize.F90 module
@@ -69,7 +20,7 @@ ABSTRACT INTERFACE
         import real_t
         real(kind=real_t) :: sz
         real(kind=real_t), intent (in) :: p(2)
-     end function IsoSZ
+    end function IsoSZ
 END INTERFACE
 
 
@@ -139,6 +90,121 @@ END SUBROUTINE destroy_storage
 END INTERFACE
 
 CONTAINS 
+
+SUBROUTINE edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T) 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Flips edges to achieve del. hood of tria. based on Metric (Me) tensor
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! INPUTS
+INTEGER(idx_t),INTENT(IN) :: DIM,NP,NF 
+REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
+
+! OUTPUTS 
+INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
+INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
+INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2T(:,:)
+
+! LOCALS
+INTEGER(idx_t) :: i
+INTEGER(idx_t) :: t1
+INTEGER(idx_t) :: t2
+INTEGER(idx_t) :: n1,n2
+INTEGER(idx_t) :: tix11,tix12,tix13,tix21,tix22,tix23
+INTEGER(idx_t) :: newt(2,3) 
+INTEGER(idx_t) :: nbt,nbn
+INTEGER(idx_t) :: mod3x1(3),mod3x2(3) 
+REAL(real_t)   :: cp1,cp2
+REAL(real_t)   :: temp1(1:2,1:1),temp2(1:1),temp3,temp4
+REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
+REAL(real_t)   :: edgeCV_t(1:1,1:2),edgeAV_t(1:1,1:2)
+LOGICAL        :: FLIP
+REAL(real_t)   :: ME(2,2)
+
+mod3x1=(/2,3,1/)
+mod3x2=(/3,1,2/)
+
+DO T1 = 1,NF 
+  DO N1 = 1,3
+    FLIP=.FALSE. 
+    T2=T2T(T1,N1) 
+    IF(T2.NE.-1) THEN 
+      n2 = T2N(t1,n1) 
+      tix11 = mod3x1(n1) 
+      tix12 = mod3x2(n1) 
+      tix21 = mod3x1(n2) 
+      tix22 = mod3x2(n2) 
+      
+      newt(1,:) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
+      newt(2,:) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
+       
+      ! swap edge 
+      newt(1,tix12) = newt(2,n2) 
+      newt(2,tix22) = newt(1,n1)
+
+      ! 2x1 
+      edgeBV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2))
+      edgeDV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(2,tix21),1:2))
+      edgeCV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(2,tix21):newt(2,tix21),1:2))
+      edgeAV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)) 
+      
+      ! cross-->(v1.X*v2.Y) - (v1.Y*v2.X);
+      cp1 = ( (edgeAV(1,1)*edgeBV(2,1)) - (edgeAV(2,1)*edgeBV(1,1)) ) ;
+      cp2 = ( (edgeCV(1,1)*edgeDV(2,1)) - (edgeCV(2,1)*edgeDV(1,1)) ) ;
+
+      EDGECV_t = TRANSPOSE(EDGECV) ! 1 x 2
+      EDGEAV_t = TRANSPOSE(EDGEAV)
+      
+      ! in the future we will calculate centroid of quad 
+      ! for now this should just return 2x2 identity matrix 
+      ME = CalcMetric((/0.0d0,0.0d0/)) 
+
+      ! Del. criterion
+      temp1 = MATMUL(EDGECV_t,ME) !result is 1x2 
+      temp2 = MATMUL(temp1,edgeDV)!result is 1x1
+      temp3 = MATMUL(EDGEAV_t,ME) !result is 1x2
+      temp4 = MATMUL(temp3,EDGEBV)!result is 1x1
+
+      IF((cp1*(temp1*temp2)+ cp2*(temp3*temp4)).GT.0.d0) THEN 
+        FLIP=.TRUE.
+      ENDIF
+       
+      IF(FLIP.eqv..true.) THEN 
+        FACETS(T1,:) = NEWT(1,:) 
+        FACETS(T2,:) = NEWT(2,:) 
+        
+        ! Update t2t and t2n
+        NBT = T2T(t2,tix21)
+        NBN = T2N(t2,tix21) 
+        T2T(T1,N1)=NBT 
+        T2N(T1,N1)=NBN 
+        
+        IF(NBT.GT.0) THEN 
+          T2T(nbt,nbn)=t1;
+          T2N(nbt,nbn)=n1;
+        ENDIF
+        T2T(T1,tix11)=t2
+        T2N(t1,tix11)=tix21 
+        T2T(t2,tix21)=t1
+        T2N(t2,tix21)=tix11
+
+        IF(NBT.GT.0) THEN 
+          t2t(nbt,nbn)=t2
+          t2n(nbt,nbn)=n2
+        ENDIF
+        
+        t2t(t1,tix11)=t2
+        t2n(t1,tix11)=tix21
+        t2t(t2,tix21)=t1
+        T2n(t2,tix21)=tix11
+      ENDIF
+    ENDIF
+  ENDDO
+ENDDO
+
+END SUBROUTINE edgeFlipper 
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 SUBROUTINE ProjectPointsBack(DIM,PSLG,POINTS,NP)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -284,10 +350,12 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 ! LOCAL 
 INTEGER(idx_t) :: i 
 REAL(real_t)   :: barvec(NUMBARS,DIM)
-REAL(real_t)   :: L(NUMBARS),L0(NUMBARS),LN(NUMBARS)
-REAL(real_t)   :: FORCES(NUMBARS)
-REAL(real_t)   :: HBARS(NUMBARS)
-REAL(real_t)   :: midpt(2),a,b,SCALE_FACTOR
+REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
+REAL(real_t)   :: FORCES(1:NUMBARS)
+REAL(real_t)   :: HBARS(1:NUMBARS)
+REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
+REAL(real_t)   :: midpt(1:2),a,b,SCALE_FACTOR
+REAL(real_t)   :: ME(1:2,1:2)
 
 !barvec=p(bars(:,1),:)-p(bars(:,2),:); % List of bar vectors
 !L=sqrt(sum(barvec.^2,2)); % L = Bar lengths
@@ -298,23 +366,30 @@ REAL(real_t)   :: midpt(2),a,b,SCALE_FACTOR
 !Fvec = F*[1,1].*barvec;
 
 ALLOCATE(FVEC(NUMBARS,2))
-
+!         L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
-  BARVEC(I,:)=POINTS(bars(I,1),:) - POINTS(bars(I,2),:)
-  L(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
-  midpt=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  HBARS(I)=HFX(midpt)
+  BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
+  MIDPT=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+  HBARS(I)=HFX(MIDPT) ! query the ideal element size
+  !L(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
+  ! compute length in metric space 
+  VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
+  VEC1=TRANSPOSE(VEC1_t) 
+  ME = CalcMetricTensor(MIDPT) 
+  temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
+  temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
+  L(I:I,1:1)=SQRT(temp2) 
 ENDDO 
 
 a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
 SCALE_FACTOR = a/b 
 
 DO I = 1,NUMBARS
-  L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
-  LN(I)=L(I)/L0(I)
+  L0(I,1)=HBARS(I)*FSCALE*SCALE_FACTOR
+  LN(I,1)=L(I,1)/L0(I,1)
   ! Bossens Heckbert 
-  FORCES(I)=(1-LN(I)**4)*EXP(-LN(I)**4)/LN(I)
+  FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
   !FORCES(I)=MAXVAL( (/1.0d0-LN(I),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)

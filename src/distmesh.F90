@@ -15,17 +15,16 @@ USE utils
 IMPLICIT NONE
 
 REAL(8) :: TS,TF
-MaxIter =100 ! MAXIMUM NUMBER OF ITERATIONS
+
+MaxIter =3 ! MAXIMUM NUMBER OF ITERATIONS
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
-CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Step 1-2: Create initial points to iterate on
+CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Create initial points to iterate on
 
 CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)         ! Compute Delaunay triangulation of point set with masking
 
-CALL TriaToTria(NF,TRIAS,T2T,T2N)                           ! Calculate the triangle adj. matrix 
-
-STOP 
+CALL TriaToTria(NF,TRIAS,T2T,T2N)                           ! Calculate the triangle adj. matrices
 
 WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
@@ -33,14 +32,10 @@ WRITE(*,'(A)') "                                      "
 
 ITER = 0 ! iteration counter 
 
-DO ! distmesh loop
-
+DO 
   CALL CPU_TIME(TS) 
 
-  ! Perform edge flips to achieve Del. hood
-  !CALL edgeFlipper(DIM,NF,TRIAS,T2T,T2N)  
-
-  ! 4. Describe each bar by a unique pair of nodes
+  ! Describe each bar by a unique pair of nodes
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
 
   ! 5. Output of the current mesh
@@ -48,15 +43,18 @@ DO ! distmesh loop
     CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
   ENDIF
 
-  ! 6. Calculate forces on bars
+  ! Calculate forces on bars
   CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 
-  ! 7. Move points based on forces
+  ! Move points based on forces
   CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 
-  ! 8. Bring outside points back to the boundary
+  ! Bring outside points back to the boundary
   CALL ProjectPointsBack(DIM,PSLG,POINTS,NP)
   
+  ! Perform edge flips to achieve Del. hood
+  CALL edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T) 
+
   ITER = ITER + 1 
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
 
