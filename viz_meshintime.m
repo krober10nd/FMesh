@@ -1,7 +1,7 @@
 t = []; p = []; 
 
 figure; 
-for i = 0 :5 : 100
+for i = 0 :3 
     n_strPadded = sprintf( '%04d', i) ; 
     Pfname = ['POINTS',n_strPadded,'.TXT'] ;
     Tfname = ['FACETS',n_strPadded,'.TXT'] ;

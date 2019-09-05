@@ -114,27 +114,35 @@ INTEGER(idx_t) :: n1,n2
 INTEGER(idx_t) :: tix11,tix12,tix13,tix21,tix22,tix23
 INTEGER(idx_t) :: newt(2,3) 
 INTEGER(idx_t) :: nbt,nbn
-INTEGER(idx_t) :: mod3x1(3),mod3x2(3) 
+INTEGER(idx_t) :: mod3x1(3),mod3x2(3),mod3x3(3)
 REAL(real_t)   :: cp1,cp2
-REAL(real_t)   :: temp1(1:2,1:1),temp2(1:1),temp3,temp4
+REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),temp3(1:1,1:2),temp4(1:1,1:1)
 REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
 REAL(real_t)   :: edgeCV_t(1:1,1:2),edgeAV_t(1:1,1:2)
 LOGICAL        :: FLIP
-REAL(real_t)   :: ME(2,2)
+REAL(real_t)   :: ME(1:2,1:2)
+REAL(real_t)   :: test(1:1,1:1)
 
 mod3x1=(/2,3,1/)
 mod3x2=(/3,1,2/)
-
+mod3x3=(/1,2,3/) 
 DO T1 = 1,NF 
   DO N1 = 1,3
+
     FLIP=.FALSE. 
+
     T2=T2T(T1,N1) 
+
     IF(T2.NE.-1) THEN 
-      n2 = T2N(t1,n1) 
+      n2    = T2N(t1,n1) 
+
       tix11 = mod3x1(n1) 
       tix12 = mod3x2(n1) 
+      tix13 = mod3x3(n1)
+
       tix21 = mod3x1(n2) 
       tix22 = mod3x2(n2) 
+      tix23 = mod3x3(n2)
       
       newt(1,:) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
       newt(2,:) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
@@ -145,7 +153,7 @@ DO T1 = 1,NF
 
       ! 2x1 
       edgeBV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2))
-      edgeDV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(2,tix21),1:2))
+      edgeDV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix21):newt(2,tix21),1:2))
       edgeCV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(2,tix21):newt(2,tix21),1:2))
       edgeAV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)) 
       
@@ -158,46 +166,50 @@ DO T1 = 1,NF
       
       ! in the future we will calculate centroid of quad 
       ! for now this should just return 2x2 identity matrix 
-      ME = CalcMetric((/0.0d0,0.0d0/)) 
+      ME = CalcMetricTensor((/0.0d0,0.0d0/)) 
 
       ! Del. criterion
-      temp1 = MATMUL(EDGECV_t,ME) !result is 1x2 
-      temp2 = MATMUL(temp1,edgeDV)!result is 1x1
-      temp3 = MATMUL(EDGEAV_t,ME) !result is 1x2
-      temp4 = MATMUL(temp3,EDGEBV)!result is 1x1
-
-      IF((cp1*(temp1*temp2)+ cp2*(temp3*temp4)).GT.0.d0) THEN 
+      temp1 = MATMUL(EDGECV_t,ME) !1x2 x 2x2 result is 1x2 
+      temp2 = MATMUL(temp1,edgeDV)!1x2 x 2x1 result is 1x1
+      temp3 = MATMUL(EDGEAV_t,ME) !1x2 x 2x2 result is 1x2
+      temp4 = MATMUL(temp3,EDGEBV)!1x2 x 2x1 result is 1x1
+      test = cp1*temp2 + cp2*temp4 
+      IF(test(1,1).GT.0.d0) THEN 
         FLIP=.TRUE.
       ENDIF
        
       IF(FLIP.eqv..true.) THEN 
+
         FACETS(T1,:) = NEWT(1,:) 
         FACETS(T2,:) = NEWT(2,:) 
         
         ! Update t2t and t2n
         NBT = T2T(t2,tix21)
         NBN = T2N(t2,tix21) 
+
         T2T(T1,N1)=NBT 
         T2N(T1,N1)=NBN 
         
         IF(NBT.GT.0) THEN 
-          T2T(nbt,nbn)=t1;
-          T2N(nbt,nbn)=n1;
+          T2T(nbt,nbn)=t1
+          T2N(nbt,nbn)=n1
         ENDIF
-        T2T(T1,tix11)=t2
-        T2N(t1,tix11)=tix21 
-        T2T(t2,tix21)=t1
-        T2N(t2,tix21)=tix11
 
-        IF(NBT.GT.0) THEN 
+        nbt=t2t(t1,tix11) 
+        nbn=t2n(t1,tix11) 
+        t2t(t2,n2)=nbt
+        t2n(t2,n2)=nbn
+
+        if(nbt.GT.0) THEN
           t2t(nbt,nbn)=t2
           t2n(nbt,nbn)=n2
-        ENDIF
+        endif
         
         t2t(t1,tix11)=t2
         t2n(t1,tix11)=tix21
         t2t(t2,tix21)=t1
-        T2n(t2,tix21)=tix11
+        t2n(t2,tix21)=tix11
+
       ENDIF
     ENDIF
   ENDDO

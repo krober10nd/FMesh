@@ -19,7 +19,7 @@ END FUNCTION MeshSize
 
 ! YOUR ORIENTATION AND ELONGATION CALCULATIONS HERE
 FUNCTION CalcMetricTensor(POINTS) RESULT(ME)
-real(kind=real_t) :: ME(2,2) 
+real(kind=real_t) :: ME(1:2,1:2) 
 real(kind=real_t),intent(in) :: POINTS(2)
 ! just isotropic for now 
 ME = 0.0d0 

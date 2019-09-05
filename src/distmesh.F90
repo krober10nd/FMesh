@@ -6,10 +6,9 @@
 ! PLACE: Universdade de Sao Paulo
 ! START: 2019-08-17 --
 !**************************************************
-! NOTE: SWAP THE MESH SIZE IN THE MODULE YourMeshSize.F90
 !
 PROGRAM DistMesh
-USE YourMeshSize
+USE YourMeshSize ! contains your mesh size function queried during execution
 USE utils 
 
 IMPLICIT NONE
@@ -39,7 +38,7 @@ DO
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
 
   ! 5. Output of the current mesh
-  IF(MOD(ITER,5).EQ.0) THEN
+  IF(MOD(ITER,1).EQ.0) THEN
     CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
   ENDIF
 
@@ -53,7 +52,7 @@ DO
   CALL ProjectPointsBack(DIM,PSLG,POINTS,NP)
   
   ! Perform edge flips to achieve Del. hood
-  CALL edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T) 
+  CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T) 
 
   ITER = ITER + 1 
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
