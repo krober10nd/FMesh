@@ -29,13 +29,15 @@ integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
 
+integer(kind=idx_t) :: NUMFLIPS 
+
 REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
 
 ! some parameters for distmesh
 REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
 REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
 REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
-REAL(kind=real_t),PARAMETER :: DELTAT=0.01d0
+REAL(kind=real_t),PARAMETER :: DELTAT=0.010d0
 REAL(kind=real_t) :: GEPS 
 REAL(kind=real_t) :: DEPS 
 REAL(kind=real_t),PARAMETER :: EPS=EPSILON(1.d0) 

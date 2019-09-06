@@ -1,13 +1,9 @@
-!**************************************************
-! Serial DistMesh algorithm in FORTRAN
-! to build a mesh in 2d or 3d.
-! 
-! AUTHOR: Keith J. Roberts, 
-! PLACE: Universdade de Sao Paulo
-! START: 2019-08-17 --
-!**************************************************
-!
+!-----------------------------------------------------------------------
+!> @brief Serial DistMesh algorithm in FORTRAN
+!>        to build a mesh in 2d or 3d.
+!-----------------------------------------------------------------------
 PROGRAM DistMesh
+!-----------------------------------------------------------------------
 USE YourMeshSize ! contains your mesh size function queried during execution
 USE utils 
 
@@ -15,7 +11,7 @@ IMPLICIT NONE
 integer i 
 REAL(8) :: TS,TF
 
-MaxIter = 20 ! MAXIMUM NUMBER OF ITERATIONS
+MaxIter = 2! MAXIMUM NUMBER OF ITERATIONS
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -36,10 +32,16 @@ DO
 
   ! Describe each bar by a unique pair of nodes
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
-
-  ! 5. Output of the current mesh
-  IF(MOD(ITER,1).EQ.0) THEN
-    CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
+  
+  ! Perform edge flips to achieve Del.-hood
+  NUMFLIPS=99999
+  DO WHILE(NUMFLIPS.GT.0) 
+    CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
+  ENDDO
+  
+  ! Output of the current mesh
+  IF(MOD(ITER,1).EQ.0.OR.ITER.EQ.0) THEN
+    CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER+1)
   ENDIF
 
   ! Calculate forces on bars
@@ -51,22 +53,13 @@ DO
   ! Bring outside points back to the boundary
   CALL ProjectPointsBack(DIM,PSLG,POINTS,NP)
 
-  CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER+1)
-  
-  ! Perform edge flips to achieve Del. hood
-  CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T) 
-  
-  CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER+2)
-
-  stop 
-
   ITER = ITER + 1 
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
 
   CALL CPU_TIME(TF) 
   WRITE(*,'(A,F12.8)') "INFO: ELAPSED TIME IS: ",TF-TS 
    
-  ! 9. Termination criterion: reached max iterations. 
+  ! Termination criterion: reached max iterations. 
   IF(ITER.EQ.MaxIter) THEN
     WRITE(*,'(A)') "INFO: MAXIMUM NUMBER OF ITERATIONS REACHED..." 
     WRITE(*,'(A)') "********************************************************"
@@ -79,9 +72,8 @@ WRITE(*,'(A,I8,A,I8,A)')"INFO: " &
 //" THE MESH HAS ",NP," VERTICES " &
 //" AND ",NF," FACES "
 
-CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
+!CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
 
-!
-!
-!
+!-----------------------------------------------------------------------
 END PROGRAM 
+!-----------------------------------------------------------------------

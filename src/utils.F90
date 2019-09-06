@@ -1,17 +1,21 @@
+!-----------------------------------------------------------------------
+!  MODULE UTILS
+!-----------------------------------------------------------------------
+!> @author Keith J. Roberts, Universidade de Sao Paulo, krober@usp.br 
+!>
+!> @brief Procedures for FMesh
+!>
+!> The program called DistMesh uses the procedures contained herein.
+!>
+!-----------------------------------------------------------------------
 MODULE UTILS 
+!-----------------------------------------------------------------------
 use YourMeshSize
 use vars
 
-!**************************************************
-! PROCEDURES FOR FMesh
-! 
-! AUTHOR: Keith J. Roberts, 
-! PLACE: Universdade de Sao Paulo
-! START: 2019-08-17 
-!**************************************************
-
 implicit none
 
+!-----------------------------------------------------------------------
 ! AN ISOTROPIC MESH SIZE FUNCTION 
 ! this is defined by the user in YourMeshSize.F90 module
 ABSTRACT INTERFACE
@@ -21,89 +25,85 @@ ABSTRACT INTERFACE
         real(kind=real_t), intent (in) :: p(2)
     end function IsoSZ
 END INTERFACE
-
+!-----------------------------------------------------------------------
 INTERFACE
-
 FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! CALLS PNPOLY TO DETERMINE IF POINT IS IN A 2D multiply-connected POLYGON
-! C CODE IS IN CFUNCTIONS.c
-! https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 import idx_t,real_t
-
 implicit none
-
 integer(kind=idx_t) :: pnpoly 
-
 integer(kind=idx_t), value, intent(in) :: NUMVERT
 real(kind=real_t),   value, intent(in) :: TESTx
 real(kind=real_t),   value, intent(in) :: TESTy
 real(kind=real_t),intent(in)           :: VERTx(NUMVERT)
 real(kind=real_t),intent(in)           :: VERTy(NUMVERT)
-
 END FUNCTION pnpoly
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 END INTERFACE
-
+!-----------------------------------------------------------------------
 INTERFACE 
-
 FUNCTION faces(DIM, NUMPOINTS, fpoints, NUMFACETS)bind(c,name='faces')
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! calls qhull library from fortran language to produce facet table of delaunay triangulation 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 import idx_t,real_t,c_ptr
-
 implicit none
-
 type(c_ptr) :: faces
 integer(kind=idx_t), value, intent(in) :: DIM
 integer(kind=idx_t), value, intent(in) :: NUMPOINTS 
 integer(kind=idx_t), intent(inout)     :: NUMFACETS
 real(kind=real_t), intent(in)          :: fpoints(DIM,NUMPOINTS)
-
 END FUNCTION faces
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
+END INTERFACE 
+!-----------------------------------------------------------------------
+INTERFACE
 SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! releases memory that was allocated in c 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR
-
 IMPLICIT NONE
-
 TYPE(C_PTR), INTENT(IN), VALUE :: p
-
 END SUBROUTINE destroy_storage
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
 END INTERFACE
+!---------------------end of c-interface------------------------------------
+
+
+PUBLIC edgeFlipper,ProjectPointsBack,ReadPSLGtxt,FormInitialPoints2D
+PUBLIC DelTriaWElim,TriaToTria,findUniqueBars,CalcForces,ApplyForces
+PUBLIC WriteMesh
+
+PRIVATE sortRows,quickSortINTLONG,densify,MeshGrid2D,PushZerosToBackREAL
+PRIVATE PushZerosToBackINT,FPNPOLY,CalcSignedDistance,CalcBaryCenter
+PRIVATE linspace,meshexp,quicksortINT,quickSortREAL,median
+
+!---------------------end of data declarations--------------------------------
 
 CONTAINS 
 
-SUBROUTINE edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Flips edges to achieve del. hood of tria. based on Metric (Me) tensor
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! INPUTS
-INTEGER(idx_t),INTENT(IN) :: DIM,NP,NF 
-REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
-! OUTPUTS 
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+! P U B L I C  F U N C T I O N S
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!> @brief Flips edges to achieve Delaunay triangulation based on metric tensor.
+!> @param[in]     DIM       problem dimension 
+!> @param[in]     NP        number of points in triangulation
+!> @param[in]     POINTS    vertices of the triangulation
+!> @param[in]     NF        number of faces in the triangulation
+!> @param[inout]     FACETS    table vertex indices describing faces 
+!> @param[inout]  T2N       table of vertex index not shared in nei. tria.
+!> @param[inout]  T2T       table of tria.-to-tria. adj.
+!> @param[out]    NUMFLIPS  number of edge flips that were performed 
+!-----------------------------------------------------------------------
+SUBROUTINE edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
+!-----------------------------------------------------------------------
+INTEGER(idx_t),INTENT(IN)                :: DIM,NP,NF 
+REAL(real_t),  INTENT(IN),ALLOCATABLE    :: POINTS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2T(:,:)
+INTEGER(idx_t),INTENT(INOUT)             :: numflips 
 
-! LOCALS
 INTEGER(idx_t) :: i
 INTEGER(idx_t) :: t1
 INTEGER(idx_t) :: t2
@@ -116,15 +116,15 @@ REAL(real_t)   :: cp1,cp2
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),temp3(1:1,1:2),temp4(1:1,1:1)
 REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
 REAL(real_t)   :: edgeCV_t(1:1,1:2),edgeAV_t(1:1,1:2)
-LOGICAL        :: FLIP
 REAL(real_t)   :: ME(1:2,1:2)
 REAL(real_t)   :: test(1:1,1:1)
+LOGICAL        :: FLIP
 
-integer        :: numflip = 0
+mod3x1(1:3)=(/2,3,1/)
+mod3x2(1:3)=(/3,1,2/)
+mod3x3(1:3)=(/1,2,3/) 
 
-mod3x1=(/2,3,1/)
-mod3x2=(/3,1,2/)
-mod3x3=(/1,2,3/) 
+numflips = 0 
 
 DO T1 = 1,NF 
   DO N1 = 1,3
@@ -132,6 +132,8 @@ DO T1 = 1,NF
     T2=T2T(T1,N1) 
     IF(T2.GE.1) THEN 
       n2    = T2N(t1,n1) 
+
+      print *, n1, n2,t1
 
       tix11 = mod3x1(n1) 
       tix12 = mod3x2(n1) 
@@ -141,8 +143,8 @@ DO T1 = 1,NF
       tix22 = mod3x2(n2) 
       tix23 = mod3x3(n2)
       
-      newt(1,:) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
-      newt(2,:) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
+      newt(1,1:3) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
+      newt(2,1:3) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
       
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
@@ -179,7 +181,7 @@ DO T1 = 1,NF
       ENDIF
        
       IF(FLIP.eqv..true.) THEN 
-        numflip = numflip + 1
+        numflips = numflips + 1
         ! swap edge 
         newt(1,tix12) = newt(2,n2) 
         newt(2,tix22) = newt(1,n1)
@@ -220,27 +222,29 @@ DO T1 = 1,NF
   ENDDO
 ENDDO
 
-print *, "NUMFLIPS : ", numflip 
+print *, "NUMFLIPS : ", numflips
 
+!-----------------------------------------------------------------------
 END SUBROUTINE edgeFlipper 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Projects vertices that have exited the domain back into the domain
+!>        using the path of steepest descent in the signed distance function.
+!> @param[in]         DIM     problem dimension 
+!> @param[in]          NP     number of points in the mesh
+!> @param[in]        PSLG     planar-straight line graph 
+!> @param[inout]   POINTS     coordinates of points in the mesh.
+!-----------------------------------------------------------------------
 SUBROUTINE ProjectPointsBack(DIM,PSLG,POINTS,NP)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Update vertex locations according to calc'ed forces. 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 IMPLICIT NONE 
 
-! INPUTS 
 INTEGER(idx_t),INTENT(IN) :: DIM , NP 
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
-
-! OUTPUTS
 REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:)
 
-! LOCAL 
 INTEGER(idx_t) :: I
 INTEGER(idx_t) :: NOUT
 REAL(real_t),ALLOCATABLE :: Dist(:)
@@ -315,15 +319,16 @@ DEALLOCATE(dgradx,dgrady,dgrad2)
 DEALLOCATE(tempDistx,tempDisty) 
 DEALLOCATE(tempP1,tempP2)
 
+!-----------------------------------------------------------------------
 END SUBROUTINE 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Update vertex locations according to calculated forces. 
+!-----------------------------------------------------------------------
 SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Update vertex locations according to calc'ed forces. 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 IMPLICIT NONE 
 
 ! INPUTS 
@@ -345,16 +350,17 @@ DO I = 1,NUMBARS
   POINTS(BARS(I,2),2) = POINTS(BARS(I,2),2) - DELTAT * FVEC(I,2)
 ENDDO
 
+!-----------------------------------------------------------------------
 END SUBROUTINE 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Calculate forcing terms for each nodes based on mesh size function 
+!>       and actual length of the edge 
+!-----------------------------------------------------------------------
 SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Calculate forcing terms for each nodes based on mesh size function 
-! and actual length of the edge 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS
@@ -368,7 +374,6 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
-REAL(real_t)   :: junk(NUMBARS) 
 REAL(real_t)   :: barvec(NUMBARS,DIM)
 REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
 REAL(real_t)   :: FORCES(1:NUMBARS)
@@ -392,7 +397,6 @@ DO I = 1,NUMBARS
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
   MIDPT=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   HBARS(I)=HFX(MIDPT) ! query the ideal element size
-  junk(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
   ! compute length in metric space 
   VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
   VEC1=TRANSPOSE(VEC1_t) 
@@ -400,7 +404,6 @@ DO I = 1,NUMBARS
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   L(I:I,1:1)=SQRT(temp2) 
-  !print *, junk(i),L(I:I,1:1) 
 ENDDO 
 
 a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
@@ -417,65 +420,19 @@ DO I = 1,NUMBARS
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
 
+!-----------------------------------------------------------------------
 END SUBROUTINE CalcForces
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
 
-SUBROUTINE sortRows(NumRows,ROWS,IDX) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Given an array of int indices (i.e., a ROW), sort the ROW in ascending 
-! lexiographic  order and return the mapping to achieve the sorted ROWS array.  
-! assumes the ROWS are the first two columns of the array ROWS (i.e., ROWS(:,1:2)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-implicit none 
-
-! INPUT 
-INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: ROWS(:,:)
-INTEGER(idx_t),INTENT(IN) :: NumRows
-
-! OUTPUT 
-INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: IDX(:)
-
-! LOCAL 
-INTEGER(idx_t) :: i,k,temp
-INTEGER(idx_t) :: junkShort(2) 
-INTEGER(8)     :: junkLong 
-INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:)
-INTEGER(idx_t),ALLOCATABLE :: tROWS(:,:)
-
-ALLOCATE(tROWS(SIZE(ROWS,1),SIZE(ROWS,2)))
-tROWS = ROWS
-
-ALLOCATE(tmpB1(NumROWS)) 
-
-! 2. Convert to unique integer number
-DO I = 1,NumRows
-  tmpB1(I) = TRANSFER((/tROWS(I,1),tROWS(I,2)/),junkLONG)  
-ENDDO
-
-! 3. Apply sorting method to sort in ascending order 
-! need the array idx which maps the sort 
-allocate(idx(numrows))
-! original indexing 
-do i =1,numRows
-  idx(i) = i
-enddo
-CALL quickSortINTLONG(tmpB1,1,NumROWS,idx) 
-
-END SUBROUTINE sortRows
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
-
+!-----------------------------------------------------------------------
+!> @brief Computes the unique bars of the mesh 
+!>        Replicates the following MATLAB 
+!>        bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])];         
+!>        bars=unique(sort(bars,2),'rows');      
+!-----------------------------------------------------------------------
 SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Find the unique edges of the triangulation 
-! bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])];         % Interior bars duplicated
-! bars=unique(sort(bars,2),'rows');      
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none 
 
 ! INPUT 
@@ -559,15 +516,15 @@ ENDDO
 !ENDDO
 !CLOSE(300)
 
+!-----------------------------------------------------------------------
 END SUBROUTINE findUniqueBars 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!> @brief Write the mesh to disk.
+!-----------------------------------------------------------------------
 SUBROUTINE WriteMesh(DIM,POINTS,NP,FACETS,NF,ITER)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Write the mesh to disk 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none 
 
 ! INPUT 
@@ -602,17 +559,18 @@ ELSE
     ! 3D VISUALIZATION GOES HERE 
 ENDIF
 
+!-----------------------------------------------------------------------
 END SUBROUTINE WriteMesh
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Read in Planar Straight Line Graph (PSLG) from a text file named 
+!>        'PSLG.txt' into derived type BounDescrip2D. Interpolate points on boundary 
+!>         so spacing between two points does nto exceed LMIN/2
+!-----------------------------------------------------------------------
 SUBROUTINE ReadPSLGtxt(PSLG,LMIN) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Read in Planar Straight Line Graph (PSLG) from a text file named 
-! 'PSLG.txt' into derived type BounDescrip2D. Interpolate points on boundary 
-! so spacing between two points does nto exceed LMIN/2
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS 
@@ -652,101 +610,16 @@ ENDIF
 
 CALL densify(LMIN/2.0d0,PSLG) 
 
+!-----------------------------------------------------------------------
 END SUBROUTINE ReadPSLGtxt 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
-SUBROUTINE densify(MAXDIFF,PSLG) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Edit vertex spacing on PSLG to ensure it is less than MAXDIFF
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-implicit none 
 
-! INPUTS 
-REAL(kind=real_t),INTENT(IN) :: MAXDIFF
-
-! OUTPUTS
-TYPE(BounDescrip2D), INTENT(INOUT) :: PSLG 
-
-! LOCAL
-REAL(kind=real_t),ALLOCATABLE :: temp(:,:)
-REAL(kind=real_t) :: DX(PSLG%NumVert),DY(PSLG%NumVert)
-REAL(kind=real_t),ALLOCATABLE :: ilat(:),ilon(:)
-
-INTEGER(kind=idx_t) :: nx,ny,nout
-INTEGER(kind=idx_t) :: NIN(PSLG%NumVert-1)
-INTEGER(kind=idx_t) :: SUMIN
-INTEGER(kind=idx_t) :: i,j,nstep,n,ni
-
-nx = size(PSLG%Vert(:,1))
-ny = size(PSLG%Vert(:,2))
-
-DO i = 2,PSLG%NumVert
-  DY(i)=ABS(PSLG%Vert(i,2)-PSLG%Vert(i-1,2));
-  DX(i)=ABS(PSLG%Vert(i,1)-PSLG%Vert(i-1,1));
-  NIN(i-1)=CEILING(MAXVAL((/DX(i),DY(i)/))/maxdiff)-1;
-ENDDO
-
-SUMIN=SUM(NIN)
-IF(SUMIN.eq.0) then 
-    WRITE(*,'(A)') "                                      "
-    WRITE(*,'(A)') "INFO: No insertion needed on PSLG."
-    WRITE(*,'(A)') "                                      "
-    RETURN
-ENDIF
-
-NOUT=SUMIN+NX;
-
-ALLOCATE(temp(NOUT,2)) 
-temp = -99999.d0
-
-n=1
-do i=1,nx-1
-    ni=nin(i)
-    if(ni.EQ.0) THEN
-        temp(n,2)=PSLG%Vert(i,2)
-        temp(n,1)=PSLG%Vert(i,1)
-        nstep=1;
-    ELSE
-        ilat=linspace(PSLG%Vert(i,2),PSLG%Vert(i+1,2),ni+2)
-        ilon=linspace(PSLG%Vert(i,1),PSLG%Vert(i+1,1),ni+2)
-        temp(n:n+ni,2)=ilat(1:ni+1)
-        temp(n:n+ni,1)=ilon(1:ni+1)
-        
-        nstep=ni+1;
-    endif
-    n = n + nstep 
-enddo
-temp(nout,2)=PSLG%Vert(ny,2)
-temp(nout,1)=PSLG%Vert(nx,1)
-
-!! NEED TO TEST MULTIPLY CONNECTED POLYGONS
-!!! debug 
-!OPEN(UNIT=303,FILE="DensifiedPSLG.txt",ACTION='WRITE')
-!do i = 1,nout 
-!  WRITE(303,"(2F12.8)")temp(i,1),temp(i,2)
-!ENDDO
-!CLOSE(303)
-ALLOCATE(PSLG%Vert0(PSLG%NumVert,PSLG%DIM))
-PSLG%Vert0 = PSLG%Vert
-PSLG%NumVert0 = PSLG%NumVert 
-DEALLOCATE(PSLG%Vert)
-ALLOCATE(PSLG%Vert(NOUT,PSLG%DIM))
-PSLG%Vert = temp 
-PSLG%NumVert = NOUT
-DEALLOCATE(temp)
-
-end subroutine densify 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
+!-----------------------------------------------------------------------
+!> @brief Form initial points to fill in the domain according to mesh size function
+!>         This corresponds with steps 1 to 2 of the distmesh algorithm. 
+!-----------------------------------------------------------------------
 subroutine FormInitialPoints2D(HFX,DIM,PSLG,LMIN,IPTS,NP)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Form initial points to fill in the domain according to mesh size function
-! This corresponds with steps 1 to 2 of the distmesh algorithm. 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
 
 ! INPUTS 
@@ -772,7 +645,6 @@ REAL(real_t)             :: temp
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! 1. Create initial distribution in bounding box (equilateral triangles)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! [x,y]=meshgrid(bbox(1,1):h0:bbox(2,1),bbox(1,2):h0*sqrt(3)/2:bbox(2,2));
@@ -884,15 +756,155 @@ CALL PushZerosToBackREAL(IPTS,NP)
 
 print *, NP 
 
+!-----------------------------------------------------------------------
 END SUBROUTINE FormInitialPoints2D
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+! P R I V A T E  F U N C T I O N S
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+
+
+!> @brief Given an array of int indices (i.e., a ROW), sort the ROW in ascending 
+!>        lexiographic  order and return the mapping to achieve the sorted ROWS array.  
+!>        assumes the ROWS are the first two columns of the array ROWS (i.e., ROWS(:,1:2)
+!-----------------------------------------------------------------------
+SUBROUTINE sortRows(NumRows,ROWS,IDX) 
+!-----------------------------------------------------------------------
+implicit none 
+
+! INPUT 
+INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: ROWS(:,:)
+INTEGER(idx_t),INTENT(IN) :: NumRows
+
+! OUTPUT 
+INTEGER(idx_t),INTENT(OUT),ALLOCATABLE :: IDX(:)
+
+! LOCAL 
+INTEGER(idx_t) :: i,k,temp
+INTEGER(idx_t) :: junkShort(2) 
+INTEGER(8)     :: junkLong 
+INTEGER(8),ALLOCATABLE :: tmpB1(:),tmpB2(:)
+INTEGER(idx_t),ALLOCATABLE :: tROWS(:,:)
+
+ALLOCATE(tROWS(SIZE(ROWS,1),SIZE(ROWS,2)))
+tROWS = ROWS
+
+ALLOCATE(tmpB1(NumROWS)) 
+
+! 2. Convert to unique integer number
+DO I = 1,NumRows
+  tmpB1(I) = TRANSFER((/tROWS(I,1),tROWS(I,2)/),junkLONG)  
+ENDDO
+
+! 3. Apply sorting method to sort in ascending order 
+! need the array idx which maps the sort 
+allocate(idx(numrows))
+! original indexing 
+do i =1,numRows
+  idx(i) = i
+enddo
+CALL quickSortINTLONG(tmpB1,1,NumROWS,idx) 
+
+!-----------------------------------------------------------------------
+END SUBROUTINE sortRows
+!-----------------------------------------------------------------------
+
+
+!> @brief Edit vertex spacing on PSLG to ensure it is less than MAXDIFF
+!-----------------------------------------------------------------------
+SUBROUTINE densify(MAXDIFF,PSLG) 
+!-----------------------------------------------------------------------
+implicit none 
+
+! INPUTS 
+REAL(kind=real_t),INTENT(IN) :: MAXDIFF
+
+! OUTPUTS
+TYPE(BounDescrip2D), INTENT(INOUT) :: PSLG 
+
+! LOCAL
+REAL(kind=real_t),ALLOCATABLE :: temp(:,:)
+REAL(kind=real_t) :: DX(PSLG%NumVert),DY(PSLG%NumVert)
+REAL(kind=real_t),ALLOCATABLE :: ilat(:),ilon(:)
+
+INTEGER(kind=idx_t) :: nx,ny,nout
+INTEGER(kind=idx_t) :: NIN(PSLG%NumVert-1)
+INTEGER(kind=idx_t) :: SUMIN
+INTEGER(kind=idx_t) :: i,j,nstep,n,ni
+
+nx = size(PSLG%Vert(:,1))
+ny = size(PSLG%Vert(:,2))
+
+DO i = 2,PSLG%NumVert
+  DY(i)=ABS(PSLG%Vert(i,2)-PSLG%Vert(i-1,2));
+  DX(i)=ABS(PSLG%Vert(i,1)-PSLG%Vert(i-1,1));
+  NIN(i-1)=CEILING(MAXVAL((/DX(i),DY(i)/))/maxdiff)-1;
+ENDDO
+
+SUMIN=SUM(NIN)
+IF(SUMIN.eq.0) then 
+    WRITE(*,'(A)') "                                      "
+    WRITE(*,'(A)') "INFO: No insertion needed on PSLG."
+    WRITE(*,'(A)') "                                      "
+    RETURN
+ENDIF
+
+NOUT=SUMIN+NX;
+
+ALLOCATE(temp(NOUT,2)) 
+temp = -99999.d0
+
+n=1
+do i=1,nx-1
+    ni=nin(i)
+    if(ni.EQ.0) THEN
+        temp(n,2)=PSLG%Vert(i,2)
+        temp(n,1)=PSLG%Vert(i,1)
+        nstep=1;
+    ELSE
+        ilat=linspace(PSLG%Vert(i,2),PSLG%Vert(i+1,2),ni+2)
+        ilon=linspace(PSLG%Vert(i,1),PSLG%Vert(i+1,1),ni+2)
+        temp(n:n+ni,2)=ilat(1:ni+1)
+        temp(n:n+ni,1)=ilon(1:ni+1)
+        
+        nstep=ni+1;
+    endif
+    n = n + nstep 
+enddo
+temp(nout,2)=PSLG%Vert(ny,2)
+temp(nout,1)=PSLG%Vert(nx,1)
+
+!! NEED TO TEST MULTIPLY CONNECTED POLYGONS
+!!! debug 
+!OPEN(UNIT=303,FILE="DensifiedPSLG.txt",ACTION='WRITE')
+!do i = 1,nout 
+!  WRITE(303,"(2F12.8)")temp(i,1),temp(i,2)
+!ENDDO
+!CLOSE(303)
+ALLOCATE(PSLG%Vert0(PSLG%NumVert,PSLG%DIM))
+PSLG%Vert0 = PSLG%Vert
+PSLG%NumVert0 = PSLG%NumVert 
+DEALLOCATE(PSLG%Vert)
+ALLOCATE(PSLG%Vert(NOUT,PSLG%DIM))
+PSLG%Vert = temp 
+PSLG%NumVert = NOUT
+DEALLOCATE(temp)
+
+!-----------------------------------------------------------------------
+end subroutine densify 
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!> @brief Push array entries with zero back of array and return updated NP size 
+!-----------------------------------------------------------------------
 SUBROUTINE PushZerosToBackREAL(ARR,NP) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Push array entries with zero back of array and return updated NP size 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
 
 ! INPUTS 
@@ -925,15 +937,16 @@ ENDDO
 
 NP = temp 
 
+!-----------------------------------------------------------------------
 END SUBROUTINE PushZerosToBackREAL
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Push array entries with zero back of array and return updated NP size 
+!-----------------------------------------------------------------------
 SUBROUTINE PushZerosToBackINT(ARR,NP) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Push array entries with zero back of array and return updated NP size 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS 
@@ -966,8 +979,10 @@ ENDDO
 
 NP = temp 
 
+!-----------------------------------------------------------------------
 END SUBROUTINE PushZerosToBackInt
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
+
 
 SUBROUTINE CalcSignedDistance(IPTS,PSLG,SignedDistance)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1035,24 +1050,26 @@ DEALLOCATE(KDRESULTS)
 END SUBROUTINE CalcSignedDistance
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
-
+!-----------------------------------------------------------------------
+!> Calls the c code pnpoly from cfunctions.c to determine if a point is in a 2D mulitply-
+!> connected polygon. 
+!> https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
+!> @param[inout] wvnx    wind speed, x-direction
+!> @param[inout] wvny    wind speed, y-direction
+!> @param[inout] prn     atmospheric pressure
+!> @param[in]    np      number of nodes in the adcirc mesh for this processor
+!> @param[in]    rhowat0 density of water
+!> @param[in]    g       gravitational acceleration
+!> @param[in]    prdeflt background atmospheric pressure
+!-----------------------------------------------------------------------
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! fortran subroutine to call inpoly PNPOLY written in cfunctions.c
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 use iso_c_binding, only : c_f_pointer,C_PTR
 implicit none 
 
-! INPUTS
 TYPE(BounDescrip2D), INTENT(IN) :: PSLG 
 REAL(kind=real_t), INTENT(IN) :: TEST(2)
-
-! OUTPUTS 
 INTEGER(kind=idx_t),INTENT(OUT) :: INoOUT 
 
-!FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
 INoOUT = pnpoly(PSLG%NumVert0, PSLG%Vert0(:,1), PSLG%Vert0(:,2), &
                 TEST(1),TEST(2))
 
