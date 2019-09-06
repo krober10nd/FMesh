@@ -12,7 +12,6 @@ use vars
 
 implicit none
 
-
 ! AN ISOTROPIC MESH SIZE FUNCTION 
 ! this is defined by the user in YourMeshSize.F90 module
 ABSTRACT INTERFACE
@@ -22,7 +21,6 @@ ABSTRACT INTERFACE
         real(kind=real_t), intent (in) :: p(2)
     end function IsoSZ
 END INTERFACE
-
 
 INTERFACE
 
@@ -100,7 +98,6 @@ SUBROUTINE edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T)
 ! INPUTS
 INTEGER(idx_t),INTENT(IN) :: DIM,NP,NF 
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
-
 ! OUTPUTS 
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
@@ -123,17 +120,17 @@ LOGICAL        :: FLIP
 REAL(real_t)   :: ME(1:2,1:2)
 REAL(real_t)   :: test(1:1,1:1)
 
+integer        :: numflip = 0
+
 mod3x1=(/2,3,1/)
 mod3x2=(/3,1,2/)
 mod3x3=(/1,2,3/) 
+
 DO T1 = 1,NF 
   DO N1 = 1,3
-
     FLIP=.FALSE. 
-
     T2=T2T(T1,N1) 
-
-    IF(T2.NE.-1) THEN 
+    IF(T2.GE.1) THEN 
       n2    = T2N(t1,n1) 
 
       tix11 = mod3x1(n1) 
@@ -146,20 +143,20 @@ DO T1 = 1,NF
       
       newt(1,:) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
       newt(2,:) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
-       
-      ! swap edge 
-      newt(1,tix12) = newt(2,n2) 
-      newt(2,tix22) = newt(1,n1)
-
-      ! 2x1 
-      edgeBV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2))
-      edgeDV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix21):newt(2,tix21),1:2))
-      edgeCV = TRANSPOSE(POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(2,tix21):newt(2,tix21),1:2))
-      edgeAV = TRANSPOSE(POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)) 
       
+      ! vectors of shape 2x1 after transpose from 1x2 shape 
+      temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
+      edgeBV = TRANSPOSE(temp1) 
+      temp1  = POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(2,tix21):newt(2,tix21),1:2)
+      edgeDV = TRANSPOSE(temp1)
+      temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(2,tix21):newt(2,tix21),1:2)
+      edgeCV = TRANSPOSE(temp1)
+      temp1  = POINTS(newt(2,tix23):newt(2,tix23),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
+      edgeAV = TRANSPOSE(temp1)
+
       ! cross-->(v1.X*v2.Y) - (v1.Y*v2.X);
-      cp1 = ( (edgeAV(1,1)*edgeBV(2,1)) - (edgeAV(2,1)*edgeBV(1,1)) ) ;
-      cp2 = ( (edgeCV(1,1)*edgeDV(2,1)) - (edgeCV(2,1)*edgeDV(1,1)) ) ;
+      cp1 = (edgeAV(1,1)*edgeBV(2,1)) - (edgeAV(2,1)*edgeBV(1,1))  
+      cp2 = (edgeCV(1,1)*edgeDV(2,1)) - (edgeCV(2,1)*edgeDV(1,1))  
 
       EDGECV_t = TRANSPOSE(EDGECV) ! 1 x 2
       EDGEAV_t = TRANSPOSE(EDGEAV)
@@ -171,15 +168,23 @@ DO T1 = 1,NF
       ! Del. criterion
       temp1 = MATMUL(EDGECV_t,ME) !1x2 x 2x2 result is 1x2 
       temp2 = MATMUL(temp1,edgeDV)!1x2 x 2x1 result is 1x1
+
       temp3 = MATMUL(EDGEAV_t,ME) !1x2 x 2x2 result is 1x2
       temp4 = MATMUL(temp3,EDGEBV)!1x2 x 2x1 result is 1x1
-      test = cp1*temp2 + cp2*temp4 
+
+      test = (cp1*temp2) + (cp2*temp4) 
+      
       IF(test(1,1).GT.0.d0) THEN 
         FLIP=.TRUE.
       ENDIF
        
       IF(FLIP.eqv..true.) THEN 
+        numflip = numflip + 1
+        ! swap edge 
+        newt(1,tix12) = newt(2,n2) 
+        newt(2,tix22) = newt(1,n1)
 
+        ! Insert new triangles (with flipped edges)
         FACETS(T1,:) = NEWT(1,:) 
         FACETS(T2,:) = NEWT(2,:) 
         
@@ -190,30 +195,32 @@ DO T1 = 1,NF
         T2T(T1,N1)=NBT 
         T2N(T1,N1)=NBN 
         
-        IF(NBT.GT.0) THEN 
+        IF(NBT.GE.1) THEN 
           T2T(nbt,nbn)=t1
           T2N(nbt,nbn)=n1
         ENDIF
 
         nbt=t2t(t1,tix11) 
         nbn=t2n(t1,tix11) 
-        t2t(t2,n2)=nbt
-        t2n(t2,n2)=nbn
+        T2T(t2,n2)=nbt
+        T2N(t2,n2)=nbn
 
-        if(nbt.GT.0) THEN
-          t2t(nbt,nbn)=t2
-          t2n(nbt,nbn)=n2
+        if(nbt.GE.1) THEN
+          T2T(nbt,nbn)=t2
+          T2N(nbt,nbn)=n2
         endif
         
-        t2t(t1,tix11)=t2
-        t2n(t1,tix11)=tix21
-        t2t(t2,tix21)=t1
-        t2n(t2,tix21)=tix11
+        T2T(t1,tix11)=t2
+        T2N(t1,tix11)=tix21
+        T2T(t2,tix21)=t1
+        T2N(t2,tix21)=tix11
 
       ENDIF
     ENDIF
   ENDDO
 ENDDO
+
+print *, "NUMFLIPS : ", numflip 
 
 END SUBROUTINE edgeFlipper 
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
@@ -278,14 +285,14 @@ IF(NOUT.GT.0) THEN
   tempP1 = PointsOUT 
   tempP1(:,1) = tempP1(:,1) + DEPS 
   CALL CalcSignedDistance(tempP1,PSLG,tempDistx) 
-  dgradx= (tempDistx - DistOut(1:NOUT))/DEPS 
+  dgradx= (tempDistx(1:NOUT) - DistOut(1:NOUT))/DEPS 
 
 !      dgrady = (feval(obj.fd,[p(ix,1),p(ix,2)+deps],obj,[])...%,1)...
 !                -d(ix))/deps; % gradient
   tempP2 = PointsOUT 
   tempP2(:,2) = tempP1(:,2) + DEPS 
   CALL CalcSignedDistance(tempP2,PSLG,tempDisty) 
-  dgrady= (tempDisty - DistOut(1:NOUT))/DEPS 
+  dgrady= (tempDisty(1:NOUT) - DistOut(1:NOUT))/DEPS 
 
 !      dgrad2 = dgradx.^+2 + dgrady.^+2;
 !      p(ix,:) = p(ix,:)-[d(ix).*dgradx./dgrad2,...
@@ -361,6 +368,7 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
+REAL(real_t)   :: junk(NUMBARS) 
 REAL(real_t)   :: barvec(NUMBARS,DIM)
 REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
 REAL(real_t)   :: FORCES(1:NUMBARS)
@@ -384,7 +392,7 @@ DO I = 1,NUMBARS
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
   MIDPT=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   HBARS(I)=HFX(MIDPT) ! query the ideal element size
-  !L(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
+  junk(I)=SQRT(BARVEC(I,1)**2.0d0 + BARVEC(I,2)**2.0d0)
   ! compute length in metric space 
   VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
   VEC1=TRANSPOSE(VEC1_t) 
@@ -392,6 +400,7 @@ DO I = 1,NUMBARS
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   L(I:I,1:1)=SQRT(temp2) 
+  !print *, junk(i),L(I:I,1:1) 
 ENDDO 
 
 a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
@@ -403,7 +412,7 @@ DO I = 1,NUMBARS
   ! Bossens Heckbert 
   FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
-  !FORCES(I)=MAXVAL( (/1.0d0-LN(I),0.0d0/))
+  !FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
@@ -1386,7 +1395,7 @@ SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_not
 !
   allocate(triangle_neighbor(triangle_num,triangle_order))
 
-  triangle_neighbor = -1 
+  triangle_neighbor = 0
 
   icol = 1
 
@@ -1417,12 +1426,12 @@ SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_not
   !find(~ismember(t(t2t(j,k),:), t(j,:)))    % Should be = t2n(j,k)
   allocate(triangle_NotSharedVertex(triangle_num,triangle_order)) 
   
-  triangle_NotSharedVertex = -1 
+  triangle_NotSharedVertex = 0
 
   do tri = 1,triangle_num
     Cur(:) = triangle_node(tri,1:3) 
     do k = 1,3 ! adj
-      if(triangle_neighbor(tri,k).eq.-1) cycle 
+      if(triangle_neighbor(tri,k).eq.0) cycle 
       Nei(:) = triangle_node(triangle_neighbor(tri,k),1:3)
 
       do p = 1,3
@@ -1492,7 +1501,7 @@ recursive subroutine quicksortINTLONG(a, first, last,idx)
 !
   implicit none
   integer(8)  a(*), x, t
-  integer first, last
+  integer first, last,tt
   integer(idx_t),intent(inout),allocatable :: idx(:)
   integer i, j
 
@@ -1508,7 +1517,7 @@ recursive subroutine quicksortINTLONG(a, first, last,idx)
      end do
      if (i >= j) exit
      t = a(i);  a(i) = a(j);  a(j) = t
-     t = idx(i);idx(i) = idx(j); idx(j) = t ! save the sort map
+     tt = idx(i);idx(i) = idx(j); idx(j) = tt ! save the sort map
      i=i+1
      j=j-1
   end do

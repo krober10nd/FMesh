@@ -30,7 +30,7 @@ CPPFLAGS = -I/usr/local/include/libqhull_r
 # compiler
 FC = gfortran
 # compiler flags
-FFLAGS = -Og -fbounds-check # -Wall -Wextra -pedantic
+FFLAGS = -Og -fbounds-check -Wall -Wextra -pedantic
 # flag to specify directory to put compiled .mod files (e.g. -module for ifort, -J for gfortran)
 F90_MOD_FLAG = -J
 

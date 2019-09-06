@@ -12,10 +12,10 @@ USE YourMeshSize ! contains your mesh size function queried during execution
 USE utils 
 
 IMPLICIT NONE
-
+integer i 
 REAL(8) :: TS,TF
 
-MaxIter =3 ! MAXIMUM NUMBER OF ITERATIONS
+MaxIter = 20 ! MAXIMUM NUMBER OF ITERATIONS
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -50,9 +50,15 @@ DO
 
   ! Bring outside points back to the boundary
   CALL ProjectPointsBack(DIM,PSLG,POINTS,NP)
+
+  CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER+1)
   
   ! Perform edge flips to achieve Del. hood
   CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T) 
+  
+  CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER+2)
+
+  stop 
 
   ITER = ITER + 1 
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
