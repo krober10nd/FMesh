@@ -1,0 +1,96 @@
+\hypertarget{namespaceutils}{}\section{utils Module Reference}
+\label{namespaceutils}\index{utils@{utils}}
+
+
+Procedures for F\+Mesh.  
+
+
+\subsection*{Data Types}
+\begin{DoxyCompactItemize}
+\item 
+interface \hyperlink{interfaceutils_1_1destroy__storage}{destroy\+\_\+storage}
+\item 
+interface \hyperlink{interfaceutils_1_1faces}{faces}
+\item 
+interface \hyperlink{interfaceutils_1_1_iso_s_z}{Iso\+SZ}
+\item 
+interface \hyperlink{interfaceutils_1_1pnpoly}{pnpoly}
+\end{DoxyCompactItemize}
+\subsection*{Functions/\+Subroutines}
+\begin{DoxyCompactItemize}
+\item 
+subroutine, public \hyperlink{namespaceutils_a5c53fe94ff412025c788ebd8d6bb66a9}{edgeflipper} (D\+IM, NP, P\+O\+I\+N\+TS, NF, F\+A\+C\+E\+TS, T2N, T2T, N\+U\+M\+F\+L\+I\+PS)
+\begin{DoxyCompactList}\small\item\em Flips edges to achieve Delaunay triangulation based on metric tensor. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_a1e12f414c57225f806ab269ba81f43c8}{projectpointsback} (D\+IM, P\+S\+LG, P\+O\+I\+N\+TS, NP)\hypertarget{namespaceutils_a1e12f414c57225f806ab269ba81f43c8}{}\label{namespaceutils_a1e12f414c57225f806ab269ba81f43c8}
+
+\begin{DoxyCompactList}\small\item\em Projects vertices that have exited the domain back into the domain using the path of steepest descent in the signed distance function. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_aa34069a7f1d2a9d87b990582219a2126}{applyforces} (D\+IM, P\+O\+I\+N\+TS, NP, B\+A\+RS, N\+U\+M\+B\+A\+RS, F\+V\+EC)\hypertarget{namespaceutils_aa34069a7f1d2a9d87b990582219a2126}{}\label{namespaceutils_aa34069a7f1d2a9d87b990582219a2126}
+
+\begin{DoxyCompactList}\small\item\em Update vertex locations according to calculated forces. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_ac79fd61dca359cd697ba28f21aa0c01a}{calcforces} (H\+FX, D\+IM, P\+O\+I\+N\+TS, NP, B\+A\+RS, N\+U\+M\+B\+A\+RS, F\+V\+EC)\hypertarget{namespaceutils_ac79fd61dca359cd697ba28f21aa0c01a}{}\label{namespaceutils_ac79fd61dca359cd697ba28f21aa0c01a}
+
+\begin{DoxyCompactList}\small\item\em Calculate forcing terms for each nodes based on mesh size function and actual length of the edge. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_a25387413cc319c8fc262f2455ce9523d}{finduniquebars} (D\+IM, NF, F\+A\+C\+ES, Num\+Bars, B\+A\+RS)\hypertarget{namespaceutils_a25387413cc319c8fc262f2455ce9523d}{}\label{namespaceutils_a25387413cc319c8fc262f2455ce9523d}
+
+\begin{DoxyCompactList}\small\item\em Computes the unique bars of the mesh Replicates the following M\+A\+T\+L\+AB bars=\mbox{[}t(\+:,\mbox{[}1,2\mbox{]});t(\+:,\mbox{[}1,3\mbox{]});t(\+:,\mbox{[}2,3\mbox{]})\mbox{]}; bars=unique(sort(bars,2),\textquotesingle{}rows\textquotesingle{});. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_afd138f9e85d95b7755f3ce665910574c}{writemesh} (D\+IM, P\+O\+I\+N\+TS, NP, F\+A\+C\+E\+TS, NF, I\+T\+ER)\hypertarget{namespaceutils_afd138f9e85d95b7755f3ce665910574c}{}\label{namespaceutils_afd138f9e85d95b7755f3ce665910574c}
+
+\begin{DoxyCompactList}\small\item\em Write the mesh to disk. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_a5ec082daa55bbd88ce9e6eabb9b8a514}{readpslgtxt} (P\+S\+LG, L\+M\+IN)\hypertarget{namespaceutils_a5ec082daa55bbd88ce9e6eabb9b8a514}{}\label{namespaceutils_a5ec082daa55bbd88ce9e6eabb9b8a514}
+
+\begin{DoxyCompactList}\small\item\em Read in Planar Straight Line Graph (P\+S\+LG) from a text file named \textquotesingle{}P\+S\+L\+G.\+txt\textquotesingle{} into derived type Boun\+Descrip2D. Interpolate points on boundary so spacing between two points does nto exceed L\+M\+I\+N/2. \end{DoxyCompactList}\item 
+subroutine, public \hyperlink{namespaceutils_ad5c2eddefdf604bc1e68666614b1d215}{forminitialpoints2d} (H\+FX, D\+IM, P\+S\+LG, L\+M\+IN, I\+P\+TS, NP)\hypertarget{namespaceutils_ad5c2eddefdf604bc1e68666614b1d215}{}\label{namespaceutils_ad5c2eddefdf604bc1e68666614b1d215}
+
+\begin{DoxyCompactList}\small\item\em Form initial points to fill in the domain according to mesh size function This corresponds with steps 1 to 2 of the distmesh algorithm. \end{DoxyCompactList}\item 
+subroutine, public {\bfseries deltriawelim} (D\+IM, P\+S\+LG, NP, P\+O\+I\+N\+TS, NF, F\+A\+C\+E\+TS, I\+E\+RR)\hypertarget{namespaceutils_a68977a44fb6d0dc073160711cf995c3d}{}\label{namespaceutils_a68977a44fb6d0dc073160711cf995c3d}
+
+\item 
+subroutine, public {\bfseries triatotria} (triangle\+\_\+num, triangle\+\_\+node, triangle\+\_\+neighbor, triangle\+\_\+notsharedvertex)\hypertarget{namespaceutils_a123830d4d36e05f90f814459592262db}{}\label{namespaceutils_a123830d4d36e05f90f814459592262db}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Procedures for F\+Mesh. 
+
+\begin{DoxyAuthor}{Author}
+Keith J. Roberts, Universidade de Sao Paulo, \href{mailto:krober@usp.br}{\tt krober@usp.\+br}
+\end{DoxyAuthor}
+The program called Dist\+Mesh uses the procedures contained herein. 
+
+\subsection{Function/\+Subroutine Documentation}
+\index{utils@{utils}!edgeflipper@{edgeflipper}}
+\index{edgeflipper@{edgeflipper}!utils@{utils}}
+\subsubsection[{\texorpdfstring{edgeflipper(\+D\+I\+M, N\+P, P\+O\+I\+N\+T\+S, N\+F, F\+A\+C\+E\+T\+S, T2\+N, T2\+T, N\+U\+M\+F\+L\+I\+P\+S)}{edgeflipper(DIM, NP, POINTS, NF, FACETS, T2N, T2T, NUMFLIPS)}}]{\setlength{\rightskip}{0pt plus 5cm}subroutine, public utils\+::edgeflipper (
+\begin{DoxyParamCaption}
+\item[{integer(idx\+\_\+t), intent(in)}]{D\+IM, }
+\item[{integer(idx\+\_\+t), intent(in)}]{NP, }
+\item[{real(real\+\_\+t), dimension(\+:,\+:), intent(in), allocatable}]{P\+O\+I\+N\+TS, }
+\item[{integer(idx\+\_\+t), intent(in)}]{NF, }
+\item[{integer(idx\+\_\+t), dimension(\+:,\+:), intent(inout), allocatable}]{F\+A\+C\+E\+TS, }
+\item[{integer(idx\+\_\+t), dimension(\+:,\+:), intent(inout), allocatable}]{T2N, }
+\item[{integer(idx\+\_\+t), dimension(\+:,\+:), intent(inout), allocatable}]{T2T, }
+\item[{integer(idx\+\_\+t), intent(inout)}]{N\+U\+M\+F\+L\+I\+PS}
+\end{DoxyParamCaption}
+)}\hypertarget{namespaceutils_a5c53fe94ff412025c788ebd8d6bb66a9}{}\label{namespaceutils_a5c53fe94ff412025c788ebd8d6bb66a9}
+
+
+Flips edges to achieve Delaunay triangulation based on metric tensor. 
+
+
+\begin{DoxyParams}[1]{Parameters}
+\mbox{\tt in}  & {\em D\+IM} & problem dimension \\
+\hline
+\mbox{\tt in}  & {\em NP} & number of points in triangulation \\
+\hline
+\mbox{\tt in}  & {\em P\+O\+I\+N\+TS} & vertices of the triangulation \\
+\hline
+\mbox{\tt in}  & {\em NF} & number of faces in the triangulation \\
+\hline
+\mbox{\tt in,out}  & {\em T2N} & table of vertex index not shared in nei. tria. \\
+\hline
+\mbox{\tt in,out}  & {\em T2T} & table of tria.-\/to-\/tria. adj. \\
+\hline
+\mbox{\tt out}  & {\em N\+U\+M\+F\+L\+I\+PS} & number of edge flips that were performed \\
+\hline
+\end{DoxyParams}
