@@ -3,7 +3,7 @@ USE vars
 implicit none
 
 ! SIZING FUNCTION RELATED PARAMETERS GO HERE 
-REAL(kind=real_t)   :: LMIN=0.03d0 ! minimum mesh size 
+REAL(kind=real_t)   :: LMIN=0.05d0 ! minimum mesh size 
 REAL(kind=real_t)   :: LMAX=0.55d0  ! maximum mesh size 
 REAL(kind=real_t)   :: GRADE=0.35d0 ! mesh size gradation 
 INTEGER(kind=idx_t) :: DIM=2        ! dimension of problem

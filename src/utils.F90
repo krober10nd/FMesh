@@ -3,10 +3,8 @@
 !-----------------------------------------------------------------------
 !> @author Keith J. Roberts, Universidade de Sao Paulo, krober@usp.br 
 !>
-!> @brief Procedures for FMesh
-!>
-!> The program called DistMesh uses the procedures contained herein.
-!>
+!> @brief The program called DistMesh uses the procedures contained herein.
+!>        First public functions are declared followed by private functions.
 !-----------------------------------------------------------------------
 MODULE UTILS 
 !-----------------------------------------------------------------------
@@ -16,17 +14,22 @@ use vars
 implicit none
 
 !-----------------------------------------------------------------------
-! AN ISOTROPIC MESH SIZE FUNCTION 
-! this is defined by the user in YourMeshSize.F90 module
+!>@brief AN ISOTROPIC MESH SIZE FUNCTION 
+!        this is defined by the user in YourMeshSize.F90 module
+!-----------------------------------------------------------------------
 ABSTRACT INTERFACE
      function IsoSZ(P)
         import real_t
         real(kind=real_t) :: sz
         real(kind=real_t), intent (in) :: p(2)
     end function IsoSZ
+!-----------------------------------------------------------------------
 END INTERFACE
 !-----------------------------------------------------------------------
 INTERFACE
+!-----------------------------------------------------------------------
+!>@brief call the inpolygon algorithm written in c.
+!-----------------------------------------------------------------------
 FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
 import idx_t,real_t
 implicit none
@@ -37,11 +40,14 @@ real(kind=real_t),   value, intent(in) :: TESTy
 real(kind=real_t),intent(in)           :: VERTx(NUMVERT)
 real(kind=real_t),intent(in)           :: VERTy(NUMVERT)
 END FUNCTION pnpoly
+!-----------------------------------------------------------------------
 END INTERFACE
+!-----------------------------------------------------------------------
+!> @brief calls qhull library from fortran language to produce facet table
+!>        of delaunay triangulation 
 !-----------------------------------------------------------------------
 INTERFACE 
 FUNCTION faces(DIM, NUMPOINTS, fpoints, NUMFACETS)bind(c,name='faces')
-! calls qhull library from fortran language to produce facet table of delaunay triangulation 
 import idx_t,real_t,c_ptr
 implicit none
 type(c_ptr) :: faces
@@ -50,15 +56,18 @@ integer(kind=idx_t), value, intent(in) :: NUMPOINTS
 integer(kind=idx_t), intent(inout)     :: NUMFACETS
 real(kind=real_t), intent(in)          :: fpoints(DIM,NUMPOINTS)
 END FUNCTION faces
+!-----------------------------------------------------------------------
 END INTERFACE 
+!-----------------------------------------------------------------------
+!> @brief releases memory that was allocated in c 
 !-----------------------------------------------------------------------
 INTERFACE
 SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
-! releases memory that was allocated in c 
 USE, INTRINSIC :: ISO_C_BINDING, ONLY: C_PTR
 IMPLICIT NONE
 TYPE(C_PTR), INTENT(IN), VALUE :: p
 END SUBROUTINE destroy_storage
+!-----------------------------------------------------------------------
 END INTERFACE
 !---------------------end of c-interface------------------------------------
 
@@ -75,6 +84,8 @@ PRIVATE linspace,meshexp,quicksortINT,quickSortREAL,median
 
 CONTAINS 
 
+
+
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
@@ -84,13 +95,15 @@ CONTAINS
 !-----------------------------------------------------------------------
 
 
+
+
 !-----------------------------------------------------------------------
 !> @brief Flips edges to achieve Delaunay triangulation based on metric tensor.
 !> @param[in]     DIM       problem dimension 
 !> @param[in]     NP        number of points in triangulation
 !> @param[in]     POINTS    vertices of the triangulation
 !> @param[in]     NF        number of faces in the triangulation
-!> @param[inout]     FACETS    table vertex indices describing faces 
+!> @param[inout]  FACETS    table vertex indices describing faces 
 !> @param[inout]  T2N       table of vertex index not shared in nei. tria.
 !> @param[inout]  T2T       table of tria.-to-tria. adj.
 !> @param[out]    NUMFLIPS  number of edge flips that were performed 
@@ -109,9 +122,9 @@ INTEGER(idx_t) :: t1
 INTEGER(idx_t) :: t2
 INTEGER(idx_t) :: n1,n2
 INTEGER(idx_t) :: tix11,tix12,tix13,tix21,tix22,tix23
-INTEGER(idx_t) :: newt(2,3) 
+INTEGER(idx_t) :: newt(1:2,1:3) 
 INTEGER(idx_t) :: nbt,nbn
-INTEGER(idx_t) :: mod3x1(3),mod3x2(3),mod3x3(3)
+INTEGER(idx_t) :: mod3x1(1:3),mod3x2(1:3),mod3x3(1:3)
 REAL(real_t)   :: cp1,cp2
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),temp3(1:1,1:2),temp4(1:1,1:1)
 REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
@@ -132,8 +145,6 @@ DO T1 = 1,NF
     T2=T2T(T1,N1) 
     IF(T2.GE.1) THEN 
       n2    = T2N(t1,n1) 
-
-      print *, n1, n2,t1
 
       tix11 = mod3x1(n1) 
       tix12 = mod3x2(n1) 
@@ -357,7 +368,9 @@ END SUBROUTINE
 
 !-----------------------------------------------------------------------
 !> @brief Calculate forcing terms for each nodes based on mesh size function 
-!>       and actual length of the edge 
+!>        and actual length of the edge 
+!>        You can comment out the default Bossens-Heckbert potential function
+!>        in lieu of the spring-based force function. 
 !-----------------------------------------------------------------------
 SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
@@ -422,6 +435,170 @@ ENDDO
 
 !-----------------------------------------------------------------------
 END SUBROUTINE CalcForces
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!> @brief TriaToTria determines triangle neighbors in a mesh (triangle_neighbor)
+!>         and the vertex index (in the neighbor triangle) not on the shared edge
+!>         between a given triangle and its neighbor (triangle_notsharedvertex)
+!>         THIS CODE HAS BEEN ADAPTED FROM:
+!> https://people.sc.fsu.edu/~jburkardt/f_src/triangulation_triangle_neighbors/triangulation_triangle_neighbors.html
+!-----------------------------------------------------------------------
+SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_notsharedvertex )
+!-----------------------------------------------------------------------
+  implicit none
+
+  ! INPUTS 
+  integer(idx_t),intent(in)::triangle_num
+  integer(idx_t),intent(in),ALLOCATABLE::triangle_node(:,:)
+
+  ! OUTPUTS 
+  integer(idx_t),intent(out),ALLOCATABLE::triangle_neighbor(:,:)
+  integer(idx_t),intent(out),ALLOCATABLE::triangle_notsharedvertex(:,:)
+
+  ! LOCALS
+  integer(idx_t) ::triangle_order=3
+  integer(idx_t),allocatable :: idx(:)
+  integer(idx_t),allocatable :: col(:,:),tcol(:,:)
+  integer(idx_t) :: Nei(3), Cur(3)
+  integer(idx_t) i
+  integer(idx_t) icol
+  integer(idx_t) j
+  integer(idx_t) k
+  integer(idx_t) p,pp
+  integer(idx_t) side1
+  integer(idx_t) side2
+  integer(idx_t) tri
+  integer(idx_t) tri1
+  integer(idx_t) tri2
+  logical :: found 
+
+!  Step 1.
+!  From the list of nodes for triangle T, of the form: (I,J,K)
+!  construct the three neighbor relations:
+!
+!    (I,J,3,T) or (J,I,3,T),
+!    (J,K,1,T) or (K,J,1,T),
+!    (K,I,2,T) or (I,K,2,T)
+!
+!  where we choose (I,J,1,T) if I < J, or else (J,I,1,T)
+!
+  allocate(col(3*triangle_num,4))
+  allocate(tcol(3*triangle_num,4))
+
+  do tri = 1, triangle_num
+
+    i = triangle_node(tri,1)
+    j = triangle_node(tri,2)
+    k = triangle_node(tri,3)
+
+    if ( i < j ) then
+      col(3*(tri-1)+1,1:4) = (/ i, j, 3, tri /)
+    else
+      col(3*(tri-1)+1,1:4) = (/ j, i, 3, tri /)
+    end if
+
+    if ( j < k ) then
+      col(3*(tri-1)+2,1:4) = (/ j, k, 1, tri /)
+    else
+      col(3*(tri-1)+2,1:4) = (/ k, j, 1, tri /)
+    end if
+
+    if ( k < i ) then
+      col(3*(tri-1)+3,1:4) = (/ k, i, 2, tri /)
+    else
+      col(3*(tri-1)+3,1:4) = (/ i, k, 2, tri /)
+    end if
+
+  end do
+!
+!  Step 2. Perform an ascending dictionary sort on the neighbor relations.
+!  We only intend to sort on rows 1 and 2; the routine we call here
+!  sorts on rows 1 through 4 but that won't hurt us.
+!
+!  What we need is to find cases where two triangles share an edge.
+!  Say they share an edge defined by the nodes I and J.  Then there are
+!  two columns of COL that start out ( I, J, ?, ? ).  By sorting COL,
+!  we make sure that these two columns occur consecutively.  That will
+!  make it easy to notice that the triangles are neighbors.
+!
+! Sort the COL array 
+  call sortRows(3*Triangle_num,col,IDX) 
+
+  ! Sort the COL array 
+  tCOL=0
+  DO I = 1, 3*Triangle_num
+    tCOL(I,1:4) = COL(IDX(I),1:4) 
+  ENDDO
+  COL = tCOL 
+  deallocate(tCOL)
+
+!
+!  Step 3. Neighboring triangles show up as consecutive columns with
+!  identical first two entries.  Whenever you spot this happening,
+!  make the appropriate entries in TRIANGLE_NEIGHBOR.
+!
+  allocate(triangle_neighbor(triangle_num,triangle_order))
+
+  triangle_neighbor = 0
+
+  icol = 1
+
+  do
+
+    if ( 3 * triangle_num <= icol ) then
+      exit
+    end if
+
+    if ( col(icol,1) /= col(icol+1,1) .or. col(icol,2) /= col(icol+1,2) ) then
+      icol = icol + 1
+      cycle
+    end if
+
+    side1 = col(icol,3)
+    tri1 = col(icol,4)
+    side2 = col(icol+1,3)
+    tri2 = col(icol+1,4)
+
+    triangle_neighbor(tri1,side1) = tri2
+    triangle_neighbor(tri2,side2) = tri1
+
+    icol = icol + 2
+
+  end do
+
+  ! compute t2n 
+  !find(~ismember(t(t2t(j,k),:), t(j,:)))    % Should be = t2n(j,k)
+  allocate(triangle_NotSharedVertex(triangle_num,triangle_order)) 
+  
+  triangle_NotSharedVertex = 0
+
+  do tri = 1,triangle_num
+    Cur(:) = triangle_node(tri,1:3) 
+    do k = 1,3 ! adj
+      if(triangle_neighbor(tri,k).eq.0) cycle 
+      Nei(:) = triangle_node(triangle_neighbor(tri,k),1:3)
+
+      do p = 1,3
+        found=.false. 
+        do pp = 1,3 
+          if(Nei(p).eq.Cur(pp)) then
+            ! Nei and Curr share this vertex 
+            found=.true.
+          endif
+        enddo
+        ! if we haven't found this vertex yet, it must be *not shared*
+        if(found.eqv..false.) then 
+          triangle_notSharedVertex(tri,k) = p
+        endif
+      enddo
+
+    enddo
+  enddo
+
+!-----------------------------------------------------------------------
+END SUBROUTINE TriaToTria
 !-----------------------------------------------------------------------
 
 
@@ -762,12 +939,89 @@ END SUBROUTINE FormInitialPoints2D
 
 
 !-----------------------------------------------------------------------
+!> @brief calls qhull library from fortran language to output facet table of delaunay triangulation 
+!>        removes triangles with centroids outside of the PSLG 
+!-----------------------------------------------------------------------
+SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
+!-----------------------------------------------------------------------
+use iso_c_binding, only : c_f_pointer,C_PTR
+implicit none
+
+! INPUTS 
+integer(kind=idx_t), intent(in) :: DIM
+integer(kind=idx_t), intent(in) :: NP
+real(kind=real_t),   intent(in),ALLOCATABLE :: POINTS(:,:)
+integer(kind=idx_t), intent(inout):: NF
+TYPE(BounDescrip2D) :: PSLG 
+
+! OUTPUTS 
+integer(kind=idx_t),intent(out),allocatable :: FACETS(:,:)
+integer(kind=idx_t),INTENT(OUT) :: IERR
+
+! LOCAL TO SUBROUTINE 
+INTEGER(kind=idx_t) :: INoOUT 
+type(c_ptr) :: cfacetemp
+integer(kind=idx_t),pointer :: ffacetemp(:)
+real(real_t),allocatable :: CENTROIDS(:,:)
+real(8) :: blah1,blah2
+
+integer :: i,j,k
+
+! call qhull library 
+CALL CPU_TIME(blah1) 
+cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
+CALL CPU_TIME(blah2) 
+!print *, blah2 - blah1 
+
+CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
+
+! reshape vector ffacetemp to facets array
+! TODO: check if it's possible to allocate to memory with an error condition
+allocate(facets(NF,DIM+1))
+
+facets=0 
+k=0 
+do i = 1,NF
+  do j = 1,DIM+1 
+    k = k + 1
+    facets(i,j)=ffacetemp(k)+1 ! ensure indexing starts at 1
+  enddo
+enddo
+
+! IMPORTANT: RELEASE MEMORY MALLOC'ed in C 
+CALL destroy_storage(cfacetemp)
+
+ALLOCATE(CENTROIDS(NF,DIM)) 
+CALL CalcBaryCenter(DIM,POINTS,NP,FACETS,NF,CENTROIDS)  
+
+! Remove triangles whose centroid is out of the domain 
+DO I = 1,NF
+  CALL FPNPOLY(PSLG,CENTROIDS(I,:),INoOUT)
+  IF(INoOUT.EQ.0) THEN 
+    FACETS(I,:)=-9000
+  ENDIF
+ENDDO
+
+CALL PushZerosToBackINT(FACETS,NF) 
+
+! TODO: BETTER ERROR CHECKING (SEE ZOLTAN ERROR LEVELS FOR REFERENCE?)
+ierr = 0 !! SUCCESS 
+
+END SUBROUTINE DelTriaWElim
+!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+
+
+
+
+!-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 ! P R I V A T E  F U N C T I O N S
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
+
+
 
 
 !> @brief Given an array of int indices (i.e., a ROW), sort the ROW in ascending 
@@ -984,15 +1238,14 @@ END SUBROUTINE PushZerosToBackInt
 !-----------------------------------------------------------------------
 
 
+!-----------------------------------------------------------------------
+!> @brief Given a PSLG and a set of points, determine the nearest 
+!         Euclidean distance to the PSLG using a KD-tree and sign the distance 
+!         negative if the point in question is inside the polygon defined by the PSLG. 
+!         and vice-versa otherwise.
+!-----------------------------------------------------------------------
 SUBROUTINE CalcSignedDistance(IPTS,PSLG,SignedDistance)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Given a PSLG and a set of points, determine the nearest 
-! Euclidean distance to the PSLG using a KD-tree and sign the distance 
-! negative if the point in question is inside the polygon defined by the PSLG. 
-! and vice-versa otherwise.
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 use kdtree2_module
 USE OMP_LIB
 implicit none 
@@ -1047,13 +1300,14 @@ DEALLOCATE(KDRESULTS)
 !CLOSE(305)
 !stop
 
+!-----------------------------------------------------------------------
 END SUBROUTINE CalcSignedDistance
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-!> Calls the c code pnpoly from cfunctions.c to determine if a point is in a 2D mulitply-
-!> connected polygon. 
-!> https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
+!> @brief Calls the c code pnpoly from cfunctions.c to determine if a point is in a 2D mulitply-
+!>        connected polygon. 
+!>        https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
 !> @param[inout] wvnx    wind speed, x-direction
 !> @param[inout] wvny    wind speed, y-direction
 !> @param[inout] prn     atmospheric pressure
@@ -1073,90 +1327,17 @@ INTEGER(kind=idx_t),INTENT(OUT) :: INoOUT
 INoOUT = pnpoly(PSLG%NumVert0, PSLG%Vert0(:,1), PSLG%Vert0(:,2), &
                 TEST(1),TEST(2))
 
+!-----------------------------------------------------------------------
 END SUBROUTINE 
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
-SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! calls qhull library from fortran language to output facet table of delaunay triangulation 
-! removes triangles with centroids outside of the PSLG 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-use iso_c_binding, only : c_f_pointer,C_PTR
-implicit none
 
-! INPUTS 
-integer(kind=idx_t), intent(in) :: DIM
-integer(kind=idx_t), intent(in) :: NP
-real(kind=real_t),   intent(in),ALLOCATABLE :: POINTS(:,:)
-integer(kind=idx_t), intent(inout):: NF
-TYPE(BounDescrip2D) :: PSLG 
-
-! OUTPUTS 
-integer(kind=idx_t),intent(out),allocatable :: FACETS(:,:)
-integer(kind=idx_t),INTENT(OUT) :: IERR
-
-! LOCAL TO SUBROUTINE 
-INTEGER(kind=idx_t) :: INoOUT 
-type(c_ptr) :: cfacetemp
-integer(kind=idx_t),pointer :: ffacetemp(:)
-real(real_t),allocatable :: CENTROIDS(:,:)
-real(8) :: blah1,blah2
-
-integer :: i,j,k
-
-! call qhull library 
-CALL CPU_TIME(blah1) 
-cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
-CALL CPU_TIME(blah2) 
-!print *, blah2 - blah1 
-
-CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
-
-! reshape vector ffacetemp to facets array
-! TODO: check if it's possible to allocate to memory with an error condition
-allocate(facets(NF,DIM+1))
-
-facets=0 
-k=0 
-do i = 1,NF
-  do j = 1,DIM+1 
-    k = k + 1
-    facets(i,j)=ffacetemp(k)+1 ! ensure indexing starts at 1
-  enddo
-enddo
-
-! IMPORTANT: RELEASE MEMORY MALLOC'ed in C 
-CALL destroy_storage(cfacetemp)
-
-ALLOCATE(CENTROIDS(NF,DIM)) 
-CALL CalcBaryCenter(DIM,POINTS,NP,FACETS,NF,CENTROIDS)  
-
-! Remove triangles whose centroid is out of the domain 
-DO I = 1,NF
-  CALL FPNPOLY(PSLG,CENTROIDS(I,:),INoOUT)
-  IF(INoOUT.EQ.0) THEN 
-    FACETS(I,:)=-9000
-  ENDIF
-ENDDO
-
-CALL PushZerosToBackINT(FACETS,NF) 
-
-! TODO: BETTER ERROR CHECKING (SEE ZOLTAN ERROR LEVELS FOR REFERENCE?)
-ierr = 0 !! SUCCESS 
-
-END SUBROUTINE DelTriaWElim
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
+!-----------------------------------------------------------------------
+!> @brief  Calculate the centroid of the triangles described in the arrays POINTS FACES
+!>         For triangles: 
+!>         centroids = (p(t(:,1),:)+p(t(:,2),:)+p(t(:,3),:))/3;
+!-----------------------------------------------------------------------
 SUBROUTINE CalcBaryCenter(DIM,POINTS,NP,FACES,NF,CENTROIDS)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Calculate the centroid of the triangles described in the arrays POINTS FACES
-! For triangles: 
-! centroids = (p(t(:,1),:)+p(t(:,2),:)+p(t(:,3),:))/3;
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 implicit none 
 
 ! INPUTS 
@@ -1190,17 +1371,18 @@ ENDDO
 !ENDDO
 !CLOSE(303)
 
+!-----------------------------------------------------------------------
 END SUBROUTINE CalcBaryCenter
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
+!> @brief Create a struture grid of points using the vectors xgv and ygv
+!>        this mimics what the MATLAB command does 
+!>        [xg,yg]=meshgrid(xvec,yvec)
+!-----------------------------------------------------------------------
 SUBROUTINE meshgrid2D(xgv, ygv, X, Y)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Create a struture grid of points using the vectors xgv and ygv
-! this mimics what the MATLAB command does 
-! [xg,yg]=meshgrid(xvec,yvec)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
   implicit none
   ! INPUTS 
   real(kind=real_t),intent(in)   :: xgv(:), ygv(:)
@@ -1210,8 +1392,10 @@ SUBROUTINE meshgrid2D(xgv, ygv, X, Y)
   X(:,:) = spread( xgv, 1, size(ygv) )
   Y(:,:) = spread( ygv, 2, size(xgv) )
 
+!-----------------------------------------------------------------------
 END SUBROUTINE
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
+
 
 FUNCTION linspace(a, b, n) result(s)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1291,184 +1475,6 @@ else
     end if
 end if
 END FUNCTION
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
-
-SUBROUTINE TriaToTria(triangle_num,triangle_node, triangle_neighbor,triangle_notsharedvertex )
-
-!*****************************************************************************80
-!
-!! TriaToTria determines triangle neighbors in a mesh (triangle_neighbor)
-!  and the vertex index (in the neighbor triangle) not on the shared edge
-!  between a given triangle and its neighbor (triangle_notsharedvertex)
-!
-! THIS CODE HAS BEEN ADAPTED FROM:
-! https://people.sc.fsu.edu/~jburkardt/f_src/triangulation_triangle_neighbors/triangulation_triangle_neighbors.html
-!  Licensing:
-!
-!    This code is distributed under the GNU LGPL license.
-!
-!  Last Modified:
-!
-!    1 September 2019
-!
-!  Author:
-!
-!    John Burkardt
-!  
-!  Adapated/Modified by: 
-! 
-!    Keith Roberts 
-  implicit none
-
-  ! INPUTS 
-  integer(idx_t),intent(in)::triangle_num
-  integer(idx_t),intent(in),ALLOCATABLE::triangle_node(:,:)
-
-  ! OUTPUTS 
-  integer(idx_t),intent(out),ALLOCATABLE::triangle_neighbor(:,:)
-  integer(idx_t),intent(out),ALLOCATABLE::triangle_notsharedvertex(:,:)
-
-  ! LOCALS
-  integer(idx_t) ::triangle_order=3
-  integer(idx_t),allocatable :: idx(:)
-  integer(idx_t),allocatable :: col(:,:),tcol(:,:)
-  integer(idx_t) :: Nei(3), Cur(3)
-  integer(idx_t) i
-  integer(idx_t) icol
-  integer(idx_t) j
-  integer(idx_t) k
-  integer(idx_t) p,pp
-  integer(idx_t) side1
-  integer(idx_t) side2
-  integer(idx_t) tri
-  integer(idx_t) tri1
-  integer(idx_t) tri2
-  logical :: found 
-
-!  Step 1.
-!  From the list of nodes for triangle T, of the form: (I,J,K)
-!  construct the three neighbor relations:
-!
-!    (I,J,3,T) or (J,I,3,T),
-!    (J,K,1,T) or (K,J,1,T),
-!    (K,I,2,T) or (I,K,2,T)
-!
-!  where we choose (I,J,1,T) if I < J, or else (J,I,1,T)
-!
-  allocate(col(3*triangle_num,4))
-  allocate(tcol(3*triangle_num,4))
-
-  do tri = 1, triangle_num
-
-    i = triangle_node(tri,1)
-    j = triangle_node(tri,2)
-    k = triangle_node(tri,3)
-
-    if ( i < j ) then
-      col(3*(tri-1)+1,1:4) = (/ i, j, 3, tri /)
-    else
-      col(3*(tri-1)+1,1:4) = (/ j, i, 3, tri /)
-    end if
-
-    if ( j < k ) then
-      col(3*(tri-1)+2,1:4) = (/ j, k, 1, tri /)
-    else
-      col(3*(tri-1)+2,1:4) = (/ k, j, 1, tri /)
-    end if
-
-    if ( k < i ) then
-      col(3*(tri-1)+3,1:4) = (/ k, i, 2, tri /)
-    else
-      col(3*(tri-1)+3,1:4) = (/ i, k, 2, tri /)
-    end if
-
-  end do
-!
-!  Step 2. Perform an ascending dictionary sort on the neighbor relations.
-!  We only intend to sort on rows 1 and 2; the routine we call here
-!  sorts on rows 1 through 4 but that won't hurt us.
-!
-!  What we need is to find cases where two triangles share an edge.
-!  Say they share an edge defined by the nodes I and J.  Then there are
-!  two columns of COL that start out ( I, J, ?, ? ).  By sorting COL,
-!  we make sure that these two columns occur consecutively.  That will
-!  make it easy to notice that the triangles are neighbors.
-!
-! Sort the COL array 
-  call sortRows(3*Triangle_num,col,IDX) 
-
-  ! Sort the COL array 
-  tCOL=0
-  DO I = 1, 3*Triangle_num
-    tCOL(I,1:4) = COL(IDX(I),1:4) 
-  ENDDO
-  COL = tCOL 
-  deallocate(tCOL)
-
-!
-!  Step 3. Neighboring triangles show up as consecutive columns with
-!  identical first two entries.  Whenever you spot this happening,
-!  make the appropriate entries in TRIANGLE_NEIGHBOR.
-!
-  allocate(triangle_neighbor(triangle_num,triangle_order))
-
-  triangle_neighbor = 0
-
-  icol = 1
-
-  do
-
-    if ( 3 * triangle_num <= icol ) then
-      exit
-    end if
-
-    if ( col(icol,1) /= col(icol+1,1) .or. col(icol,2) /= col(icol+1,2) ) then
-      icol = icol + 1
-      cycle
-    end if
-
-    side1 = col(icol,3)
-    tri1 = col(icol,4)
-    side2 = col(icol+1,3)
-    tri2 = col(icol+1,4)
-
-    triangle_neighbor(tri1,side1) = tri2
-    triangle_neighbor(tri2,side2) = tri1
-
-    icol = icol + 2
-
-  end do
-
-  ! compute t2n 
-  !find(~ismember(t(t2t(j,k),:), t(j,:)))    % Should be = t2n(j,k)
-  allocate(triangle_NotSharedVertex(triangle_num,triangle_order)) 
-  
-  triangle_NotSharedVertex = 0
-
-  do tri = 1,triangle_num
-    Cur(:) = triangle_node(tri,1:3) 
-    do k = 1,3 ! adj
-      if(triangle_neighbor(tri,k).eq.0) cycle 
-      Nei(:) = triangle_node(triangle_neighbor(tri,k),1:3)
-
-      do p = 1,3
-        found=.false. 
-        do pp = 1,3 
-          if(Nei(p).eq.Cur(pp)) then
-            ! Nei and Curr share this vertex 
-            found=.true.
-          endif
-        enddo
-        ! if we haven't found this vertex yet, it must be *not shared*
-        if(found.eqv..false.) then 
-          triangle_notSharedVertex(tri,k) = p
-        endif
-      enddo
-
-    enddo
-  enddo
-
-END SUBROUTINE TriaToTria
 !*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
 recursive subroutine quicksortINT(a, first, last)
