@@ -941,8 +941,9 @@ END SUBROUTINE FormInitialPoints2D
 !-----------------------------------------------------------------------
 !> @brief calls qhull library from fortran language to output facet table of delaunay triangulation 
 !>        removes triangles with centroids outside of the PSLG 
+!>        Organizes the vertices in ccw order.
 !-----------------------------------------------------------------------
-SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS,IERR)
+SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS)
 !-----------------------------------------------------------------------
 use iso_c_binding, only : c_f_pointer,C_PTR
 implicit none
@@ -956,7 +957,6 @@ TYPE(BounDescrip2D) :: PSLG
 
 ! OUTPUTS 
 integer(kind=idx_t),intent(out),allocatable :: FACETS(:,:)
-integer(kind=idx_t),INTENT(OUT) :: IERR
 
 ! LOCAL TO SUBROUTINE 
 INTEGER(kind=idx_t) :: INoOUT 
@@ -1004,11 +1004,12 @@ ENDDO
 
 CALL PushZerosToBackINT(FACETS,NF) 
 
-! TODO: BETTER ERROR CHECKING (SEE ZOLTAN ERROR LEVELS FOR REFERENCE?)
-ierr = 0 !! SUCCESS 
+! organize vertices in ccw order
+CALL WindingOrder2D(FACETS,NF,Points) 
 
+!-----------------------------------------------------------------------
 END SUBROUTINE DelTriaWElim
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
 
 
@@ -1022,6 +1023,41 @@ END SUBROUTINE DelTriaWElim
 !-----------------------------------------------------------------------
 
 
+!> @brief Given an array of triangular facets, organize them in a 
+!>        CCW order by calculating the cross-product and reversing 
+!>        the vertex order in the facet if necessary.
+!-----------------------------------------------------------------------
+SUBROUTINE WindingOrder2D(FACETS,NF,POINTS) 
+!-----------------------------------------------------------------------
+implicit none 
+INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:) 
+INTEGER(idx_t),INTENT(IN) :: NF
+REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
+
+REAL(real_t) :: AtoB(2),BtoC(2)
+REAL(real_t) :: crossz 
+integer(idx_t):: i
+integer(idx_t):: nm1,nm2,nm3
+integer(idx_t):: temp
+
+do i = 1,nf
+  nm1=facets(i,1) ! a
+  nm2=facets(i,2) ! b
+  nm3=facets(i,3) ! c
+  AtoB = points(nm2,:) - points(nm1,:) ! b - a
+  BtoC = points(nm3,:) - points(nm2,:) ! c - b
+  crossz = AtoB(1)*BtoC(2) - AtoB(2)*BtoC(1) 
+  ! then cw,reverse   
+  if(crossz.lt.0.d0) then
+    temp=facets(i,1)  
+    facets(i,1)=facets(i,3) 
+    facets(i,3)=temp
+    !print *, "reversed"
+  endif
+enddo
+!-----------------------------------------------------------------------
+END SUBROUTINE WindingOrder2D
+!-----------------------------------------------------------------------
 
 
 !> @brief Given an array of int indices (i.e., a ROW), sort the ROW in ascending 

@@ -6,17 +6,19 @@ PROGRAM DistMesh
 !-----------------------------------------------------------------------
 USE YourMeshSize ! contains your mesh size function queried during execution
 USE utils 
+USE vars 
 
 IMPLICIT NONE
+!integer :: lastNumFlips
 REAL(8) :: TS,TF
 
-MaxIter = 2                                                 ! MAXIMUM NUMBER OF ITERATIONS
+MaxIter = 100                                               ! Maximum number of iterations
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
 CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Create initial points to iterate on
 
-CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS,IERR)         ! Compute Delaunay triangulation of point set with masking
+CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS)              ! Compute Delaunay triangulation of point set with masking
 
 CALL TriaToTria(NF,TRIAS,T2T,T2N)                           ! Calculate the triangle adj. matrices
 
@@ -30,9 +32,15 @@ DO
   CALL CPU_TIME(TS) 
 
   ! Perform edge flips to achieve Del.-hood
-  NUMFLIPS=99999
+  NUMFLIPS=99999;
+  !LastNumFlips=99999
   DO WHILE(NUMFLIPS.GT.0) 
     CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
+    !IF(LastNumFlips.EQ.NumFlips) THEN 
+    !  print *, "outta here"
+    !  EXIT ! stuck lets get out of here! 
+    !ENDIF
+    !LastNumFlips=NumFlips 
   ENDDO
   
   ! Output of the current mesh
@@ -68,7 +76,7 @@ DO
 ENDDO
 
 WRITE(*,'(A,I8,A,I8,A)')"INFO: " & 
-//" THE MESH HAS ",NP," VERTICES " &
+//" FINAL MESH HAS ",NP," VERTICES " &
 //" AND ",NF," FACES "
 
 CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)

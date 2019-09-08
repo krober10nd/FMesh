@@ -18,6 +18,7 @@ MeshSize = minval((/LMAX,(1.0d0-points(1))*GRADE + LMIN/))
 END FUNCTION MeshSize
 
 ! YOUR ORIENTATION AND ELONGATION CALCULATIONS HERE
+! IF ISOTROPIC SET TO IDENTITY MATRIX 
 FUNCTION CalcMetricTensor(POINTS) RESULT(ME)
 real(kind=real_t) :: ME(1:2,1:2) 
 real(kind=real_t),intent(in) :: POINTS(2)
