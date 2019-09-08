@@ -15,7 +15,7 @@ implicit none
 
 !-----------------------------------------------------------------------
 !>@brief AN ISOTROPIC MESH SIZE FUNCTION 
-!        this is defined by the user in YourMeshSize.F90 module
+!>       this is defined by the user in YourMeshSize.F90 module
 !-----------------------------------------------------------------------
 ABSTRACT INTERFACE
      function IsoSZ(P)
@@ -25,10 +25,10 @@ ABSTRACT INTERFACE
     end function IsoSZ
 !-----------------------------------------------------------------------
 END INTERFACE
-!-----------------------------------------------------------------------
+!----------------------------begin of c-interface-----------------------
 INTERFACE
 !-----------------------------------------------------------------------
-!>@brief call the inpolygon algorithm written in c.
+!>@brief call the inpolygon algorithm written in c from fortran.
 !-----------------------------------------------------------------------
 FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
 import idx_t,real_t
@@ -59,7 +59,7 @@ END FUNCTION faces
 !-----------------------------------------------------------------------
 END INTERFACE 
 !-----------------------------------------------------------------------
-!> @brief releases memory that was allocated in c 
+!> @brief releases memory that was allocated in c in the faces function call 
 !-----------------------------------------------------------------------
 INTERFACE
 SUBROUTINE destroy_storage(p) BIND(C, NAME='destroy_storage')
@@ -75,6 +75,7 @@ END INTERFACE
 PUBLIC edgeFlipper,ProjectPointsBack,ReadPSLGtxt,FormInitialPoints2D
 PUBLIC DelTriaWElim,TriaToTria,findUniqueBars,CalcForces,ApplyForces
 PUBLIC WriteMesh
+
 
 PRIVATE sortRows,quickSortINTLONG,densify,MeshGrid2D,PushZerosToBackREAL
 PRIVATE PushZerosToBackINT,FPNPOLY,CalcSignedDistance,CalcBaryCenter
@@ -331,7 +332,7 @@ DEALLOCATE(tempDistx,tempDisty)
 DEALLOCATE(tempP1,tempP2)
 
 !-----------------------------------------------------------------------
-END SUBROUTINE 
+END SUBROUTINE ProjectPointsBack 
 !-----------------------------------------------------------------------
 
 
@@ -362,15 +363,15 @@ DO I = 1,NUMBARS
 ENDDO
 
 !-----------------------------------------------------------------------
-END SUBROUTINE 
+END SUBROUTINE ApplyForces
 !-----------------------------------------------------------------------
 
 
 !-----------------------------------------------------------------------
-!> @brief Calculate forcing terms for each nodes based on mesh size function 
-!>        and actual length of the edge 
+!> @brief Calculate forcing terms for each vertex based on mesh size function 
+!>        and actual length of the edge. 
 !>        You can comment out the default Bossens-Heckbert potential function
-!>        in lieu of the spring-based force function. 
+!>        for the spring-based force function. 
 !-----------------------------------------------------------------------
 SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
@@ -1340,17 +1341,11 @@ DEALLOCATE(KDRESULTS)
 END SUBROUTINE CalcSignedDistance
 !-----------------------------------------------------------------------
 
+
 !-----------------------------------------------------------------------
 !> @brief Calls the c code pnpoly from cfunctions.c to determine if a point is in a 2D mulitply-
 !>        connected polygon. 
 !>        https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html#The%20C%20Code
-!> @param[inout] wvnx    wind speed, x-direction
-!> @param[inout] wvny    wind speed, y-direction
-!> @param[inout] prn     atmospheric pressure
-!> @param[in]    np      number of nodes in the adcirc mesh for this processor
-!> @param[in]    rhowat0 density of water
-!> @param[in]    g       gravitational acceleration
-!> @param[in]    prdeflt background atmospheric pressure
 !-----------------------------------------------------------------------
 SUBROUTINE FPNPOLY(PSLG,TEST,INoOUT) 
 use iso_c_binding, only : c_f_pointer,C_PTR
@@ -1413,7 +1408,7 @@ END SUBROUTINE CalcBaryCenter
 
 
 !-----------------------------------------------------------------------
-!> @brief Create a struture grid of points using the vectors xgv and ygv
+!> @brief Create a strutured grid of points using the vectors xgv and ygv
 !>        this mimics what the MATLAB command does 
 !>        [xg,yg]=meshgrid(xvec,yvec)
 !-----------------------------------------------------------------------
@@ -1433,15 +1428,13 @@ END SUBROUTINE
 !-----------------------------------------------------------------------
 
 
+!> @brief Creates a vector s that spans the interval (a,b) with n points. 
+!> this mimics what the MATLAB command does 
+!> REFERENCE: https://github.com/certik/fortran-utils
+!> vec = linspace(a,b,n) 
+!-----------------------------------------------------------------------
 FUNCTION linspace(a, b, n) result(s)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Creates a vector s that spans the interval (a,b) with n points. 
-! this mimics what the MATLAB command does 
-! REFERENCE: https://github.com/certik/fortran-utils
-! vec = linspace(a,b,n) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 implicit none
 ! INPUTS 
 real(kind=real_t), intent(in) :: a, b
@@ -1450,17 +1443,22 @@ integer(kind=idx_t), intent(in) :: n
 real(kind=real_t) :: s(n)
 
 s = meshexp(a, b, 1.0d0, n-1)
-END FUNCTION
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+!-----------------------------------------------------------------------
+END FUNCTION
+!-----------------------------------------------------------------------
+
+
+!> @brief REFERENCE: https://github.com/certik/fortran-utils
+!> Generates exponential mesh of N elements on [rmin, rmax]
+!>
+!> Arguments
+!> ---------
+!>
+!>The domain [rmin, rmax], the mesh will contain both enkind=real_toints:
+!-----------------------------------------------------------------------
 FUNCTION meshexp(rmin, rmax, a, N) result(mesh)
-! REFERENCE: https://github.com/certik/fortran-utils
-! Generates exponential mesh of N elements on [rmin, rmax]
-!
-! Arguments
-! ---------
-!
-! The domain [rmin, rmax], the mesh will contain both enkind=real_toints:
+!-----------------------------------------------------------------------
 real(kind=real_t), intent(in) :: rmin, rmax
 !
 ! The ratio of the rightmost to leftmost element lengths in the mesh (for a > 1
@@ -1510,19 +1508,18 @@ else
         WRITE(*,'(A)') "meshexp: N >= 1 required"
     end if
 end if
+!-----------------------------------------------------------------------
 END FUNCTION
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!> @brief  quicksort.f -*-f90-*-
+!> Author: t-nissie
+!> License: GPLv3
+!> Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
+!-----------------------------------------------------------------------
 recursive subroutine quicksortINT(a, first, last)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! quicksort.f -*-f90-*-
-! Author: t-nissie
-! License: GPLv3
-! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!
+!-----------------------------------------------------------------------
   implicit none
   integer(4)  a(*), x, t
   integer first, last
@@ -1545,18 +1542,19 @@ recursive subroutine quicksortINT(a, first, last)
   end do
   if (first < i-1) call quicksortINT(a, first, i-1)
   if (j+1 < last)  call quicksortINT(a, j+1, last)
-end subroutine quicksortINT
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+!-----------------------------------------------------------------------
+end subroutine quicksortINT
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
 recursive subroutine quicksortINTLONG(a, first, last,idx)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 ! quicksort.f -*-f90-*-
 ! Author: t-nissie
 ! License: GPLv3
 ! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
   implicit none
   integer(8)  a(*), x, t
@@ -1582,8 +1580,10 @@ recursive subroutine quicksortINTLONG(a, first, last,idx)
   end do
   if (first < i-1) call quicksortINTLONG(a, first, i-1,idx)
   if (j+1 < last)  call quicksortINTLONG(a, j+1, last,idx)
+!-----------------------------------------------------------------------
 end subroutine quicksortINTLONG
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
+
 
 recursive subroutine quicksortREAL(a, first, last)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
