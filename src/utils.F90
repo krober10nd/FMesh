@@ -187,7 +187,6 @@ DO T1 = 1,NF
 
       EDGECV_t = TRANSPOSE(EDGECV) ! 1 x 2
       EDGEAV_t = TRANSPOSE(EDGEAV)
-      
 
       ! Del. criterion
       temp1 = MATMUL(EDGECV_t,ME) !1x2 x 2x2 result is 1x2 
@@ -401,30 +400,33 @@ INTEGER(idx_t) :: i
 REAL(real_t)   :: barvec(NUMBARS,DIM)
 REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
 REAL(real_t)   :: FORCES(1:NUMBARS)
-REAL(real_t)   :: HBARS(1:NUMBARS)
+REAL(real_t)   :: HBARS(1:NUMBARS,1:1)
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
-REAL(real_t)   :: midpt(1:2),a,b,SCALE_FACTOR
+REAL(real_t)   :: midpt(1:2,1:1),a,b,SCALE_FACTOR
 REAL(real_t)   :: ME(1:2,1:2)
 
-!barvec=p(bars(:,1),:)-p(bars(:,2),:); % List of bar vectors
-!L=sqrt(sum(barvec.^2,2)); % L = Bar lengths
-!hbars=feval(fh,(p(bars(:,1),:)+p(bars(:,2),:))/2,varargin{:});
-!L0=hbars*Fscale*median(L)/median(HBARS); ! From Roberts et al. 2019
-!LN = L./L0;  
-!F    = (1-LN.^4).*exp(-LN.^4)./LN; % Bossens-Heckbert edge force
-!Fvec = F*[1,1].*barvec;
-
 ALLOCATE(FVEC(NUMBARS,2))
-!         L(jj,1) = sqrt(rij'*M*rij);
+! L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
+  ! To calculate edgelength, assume edge extrues along ideal length 
+  MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+  ME = CalcMetricTensor(MIDPT(1:2,1)) ! query metric tensor at midpoint
+  HBARS(I,1)=HFX(MIDPT(1:2,1)) ! query the ideal element size
+  ! assume ideal edge extrudes at ideal angle 
+  a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
+  VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-0.0d0*HBARS(I,1)) ! cos(a)
+  VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-1.0d0*HBARS(I,1)) ! sin(a)
+  VEC1 = transpose(VEC1_t) 
+  temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
+  temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
+  HBARS(I:I,1:1)=SQRT(temp2) 
+
+
+  ! compute the actual length in metric space 
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
-  MIDPT=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  HBARS(I)=HFX(MIDPT) ! query the ideal element size
-  ! compute length in metric space 
   VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
   VEC1=TRANSPOSE(VEC1_t) 
-  ME = CalcMetricTensor(MIDPT) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   L(I:I,1:1)=SQRT(temp2) 
@@ -434,15 +436,26 @@ a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
 SCALE_FACTOR = a/b 
 
 DO I = 1,NUMBARS
-  L0(I,1)=HBARS(I)*FSCALE*SCALE_FACTOR
+  L0(I,1)=HBARS(I,1)*FSCALE*SCALE_FACTOR
   LN(I,1)=L(I,1)/L0(I,1)
   ! Bossens Heckbert 
   FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
   !FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
+  
+  !!IF LN is exceedingly small, then we must 
+  !!INCREASE THE FORCE
+  !IF(LN(I,1).LT.0.10d0) THEN
+  !  print *,"really close" 
+  !  print *, POINTS(BARS(I,1),:),POINTS(BARS(I,2),:)
+  !  print *, LN(I,1) 
+  !  print *, FORCES(I) 
+  !  !LN(I,1) = 0.10d0
+  !ENDIF
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
+
 
 !-----------------------------------------------------------------------
 END SUBROUTINE CalcForces
@@ -931,6 +944,7 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
   H=HFX(IPTS(I,:))
+  !print *,"BEFORE ",H 
   ME = CalcMetricTensor(IPTS(I,:)) 
   ! assume ideal edge extrudes at ideal angle 
   a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
@@ -940,6 +954,7 @@ DO I = 1,NP
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   H=SQRT(temp2) 
+  !print *,"AFTER ",H 
   r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
 ENDDO
 a = maxval(r0) 

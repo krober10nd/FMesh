@@ -26,24 +26,27 @@ WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
 WRITE(*,'(A)') "                                      "
 
-ITER = 1 ! iteration counter 
+ITER    = 1 ! iteration counter 
+DELTAT  = 0.10d0
+NSCREEN = 1 ! Number of times to write data to disk
 
 DO 
   CALL CPU_TIME(TS) 
 
   ! Perform edge flips to achieve Del.-hood
   NUMFLIPS=99999;
-  !LastNumFlips=99999
+  LastNumFlips=99999
   DO WHILE(NUMFLIPS.GT.0) 
     CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
     IF(LastNumFlips.EQ.NumFlips) THEN 
       EXIT ! stuck lets get out of here! 
     ENDIF
     LastNumFlips=NumFlips 
+    ! check for any overlapped elements, will need to lower timestep Z
   ENDDO
   
   ! Output of the current mesh
-  IF(MOD(ITER,5).EQ.0.OR.ITER.EQ.1) THEN
+  IF(MOD(ITER,NSCREEN).EQ.0.OR.ITER.EQ.1) THEN
     CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
   ENDIF
   

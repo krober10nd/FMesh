@@ -37,11 +37,11 @@ REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right.
 REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
 REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
 REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
-REAL(kind=real_t),PARAMETER :: DELTAT=0.01d0
+REAL(kind=real_t) :: DELTAT ! important, can change during program
 REAL(kind=real_t) :: GEPS 
 REAL(kind=real_t) :: DEPS 
 REAL(kind=real_t),PARAMETER :: EPS=EPSILON(1.d0) 
-INTEGER(kind=idx_t) :: iter,MaxIter
+INTEGER(kind=idx_t) :: iter,MaxIter,nscreen
 
 ! 2D domain boundary description 
 TYPE BounDescrip2D
