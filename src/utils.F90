@@ -131,6 +131,7 @@ REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),temp3(1:1,1:2),temp4(1:1,1:1)
 REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
 REAL(real_t)   :: edgeCV_t(1:1,1:2),edgeAV_t(1:1,1:2)
 REAL(real_t)   :: ME(1:2,1:2)
+REAL(real_t)   :: pmid(2)
 REAL(real_t)   :: test(1:1,1:1)
 LOGICAL        :: FLIP
 
@@ -157,7 +158,19 @@ DO T1 = 1,NF
       
       newt(1,1:3) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
       newt(2,1:3) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
+
+      ! compute midpoint of quadilateral of connected triangles 
+      pmid(1) = POINTS(NEWT(1,1),1)+POINTS(NEWT(1,2),1)+POINTS(NEWT(1,3),1)
+      pmid(1) = pmid(1)+POINTS(NEWT(2,1),1)+POINTS(NEWT(2,2),1)+POINTS(NEWT(2,3),1)
+      pmid(1) = pmid(1)/6.0d0
       
+      pmid(2) = POINTS(NEWT(1,1),2)+POINTS(NEWT(1,2),2)+POINTS(NEWT(1,3),2)
+      pmid(2) = pmid(2)+POINTS(NEWT(2,1),2)+POINTS(NEWT(2,2),2)+POINTS(NEWT(2,3),2)
+      pmid(2) = pmid(2)/6.0d0
+
+      ! eval metric tensor at mdpt 
+      ME = CalcMetricTensor(pmid) 
+
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
       edgeBV = TRANSPOSE(temp1) 
@@ -175,9 +188,6 @@ DO T1 = 1,NF
       EDGECV_t = TRANSPOSE(EDGECV) ! 1 x 2
       EDGEAV_t = TRANSPOSE(EDGEAV)
       
-      ! in the future we will calculate centroid of quad 
-      ! for now this should just return 2x2 identity matrix 
-      ME = CalcMetricTensor((/0.0d0,0.0d0/)) 
 
       ! Del. criterion
       temp1 = MATMUL(EDGECV_t,ME) !1x2 x 2x2 result is 1x2 
@@ -811,13 +821,15 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: IPTS(:,:)
 INTEGER(idx_t),INTENT(OUT) :: NP 
 
 ! local to subroutine 
+REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
+REAL(real_t)   :: ME(1:2,1:2)
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
 !REAL(real_t),ALLOCATABLE :: Dist(:)
 INTEGER(idx_t),ALLOCATABLE:: INoOUT(:) 
-REAL(real_t),ALLOCATABLE :: R0(:)
-REAL(real_t)             :: H
+REAL(real_t),ALLOCATABLE :: R0(:,:)
+REAL(real_t)             :: H(1:1,1:1)
 REAL(real_t)             :: a,b
 REAL(real_t)             :: temp
 INTEGER(idx_t)           :: nx,ny,nz
@@ -916,14 +928,23 @@ CALL PushZerosToBackREAL(IPTS,NP)
 !
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
-ALLOCATE(r0(NP)) 
+ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
   H=HFX(IPTS(I,:))
-  r0(i)  = 1.0d0/(H**2.0d0)
+  ME = CalcMetricTensor(IPTS(I,:)) 
+  ! assume ideal edge extrudes at ideal angle 
+  a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
+  VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-0.0d0*H(1,1)) ! cos(a)
+  VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-1.0d0*H(1,1)) ! sin(a)
+  VEC1 = transpose(VEC1_t) 
+  temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
+  temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
+  H=SQRT(temp2) 
+  r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
 ENDDO
 a = maxval(r0) 
 DO I = 1,NP 
-  b = r0(i)/a
+  b = r0(i,1)/a
   if(rand().gt.b) then
     ipts(I,1) = -9999.d0 
     ipts(I,2) = -9999.d0

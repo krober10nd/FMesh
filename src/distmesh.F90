@@ -12,7 +12,7 @@ IMPLICIT NONE
 integer :: lastNumFlips
 REAL(8) :: TS,TF
 
-MaxIter = 100                                               ! Maximum number of iterations
+MaxIter = 1000                                               ! Maximum number of iterations
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -37,14 +37,13 @@ DO
   DO WHILE(NUMFLIPS.GT.0) 
     CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
     IF(LastNumFlips.EQ.NumFlips) THEN 
-      print *, "outta here"
       EXIT ! stuck lets get out of here! 
     ENDIF
     LastNumFlips=NumFlips 
   ENDDO
   
   ! Output of the current mesh
-  IF(MOD(ITER,20).EQ.0.OR.ITER.EQ.1) THEN
+  IF(MOD(ITER,5).EQ.0.OR.ITER.EQ.1) THEN
     CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
   ENDIF
   
