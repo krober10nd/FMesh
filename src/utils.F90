@@ -415,6 +415,7 @@ DO I = 1,NUMBARS
   HBARS(I,1)=HFX(MIDPT(1:2,1)) ! query the ideal element size
   ! assume ideal edge extrudes at ideal angle 
   a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
+  ! a = CalcIdealAngle(MIDPT(1:2,1)) 
   VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-0.0d0*HBARS(I,1)) ! cos(a)
   VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-1.0d0*HBARS(I,1)) ! sin(a)
   VEC1 = transpose(VEC1_t) 
@@ -442,16 +443,6 @@ DO I = 1,NUMBARS
   FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
   !FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
-  
-  !!IF LN is exceedingly small, then we must 
-  !!INCREASE THE FORCE
-  !IF(LN(I,1).LT.0.10d0) THEN
-  !  print *,"really close" 
-  !  print *, POINTS(BARS(I,1),:),POINTS(BARS(I,2),:)
-  !  print *, LN(I,1) 
-  !  print *, FORCES(I) 
-  !  !LN(I,1) = 0.10d0
-  !ENDIF
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
