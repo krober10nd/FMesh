@@ -1,20 +1,14 @@
+!-----------------------------------------------------------------------
+!  MODULE VARS 
+!-----------------------------------------------------------------------
+!> @brief variables and types for fmesh
+!-----------------------------------------------------------------------
 MODULE VARS 
+!-----------------------------------------------------------------------
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
+implicit none
 
-!**************************************************
-! VARIABLES AND TYPES FOR FMesh
-! 
-! AUTHOR: Keith J. Roberts, 
-! PLACE: Universdade de Sao Paulo
-! START: 2019-08-17 
-!**************************************************
-IMPLICIT NONE 
-
-!!!!!!
-! only support 32-bit integers and 64-bit reals 
-!!!!!!
 integer, parameter, public :: idx_t = c_int32_t
-
 integer, parameter, public :: real_t = c_double
 
 ! Later on this should become a derived type 
@@ -28,34 +22,64 @@ real(kind=real_t),allocatable   :: fvec(:,:) ! [numbars x 2] array of spring for
 integer(kind=idx_t) :: NP    ! number of vertices/nodes/points in the mesh
 integer(kind=idx_t) :: NF    ! number of facets in mesh 
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
-
-integer(kind=idx_t) :: NUMFLIPS 
+integer(kind=idx_t) :: NumFlips ! counts the number of edge flips per iteration
+integer(kind=idx_t) :: lastNumFlips ! in the last iteration, the number of edge flips
 
 REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
 
 ! some parameters for distmesh
+REAL(kind=real_t) :: DELTAT ! important
 REAL(kind=real_t),PARAMETER :: DPTOL =0.001d0
 REAL(kind=real_t),PARAMETER :: TTOL  =0.1d0
 REAL(kind=real_t),PARAMETER :: FSCALE=1.2d0 
-REAL(kind=real_t) :: DELTAT ! important, can change during program
 REAL(kind=real_t) :: GEPS 
 REAL(kind=real_t) :: DEPS 
 REAL(kind=real_t),PARAMETER :: EPS=EPSILON(1.d0) 
 INTEGER(kind=idx_t) :: iter,MaxIter,nscreen
 
-! 2D domain boundary description 
-TYPE BounDescrip2D
-   INTEGER(kind=idx_t) :: NumVert
-   INTEGER(kind=idx_t) :: NumVert0
-   INTEGER(kind=idx_t) :: DIM
-   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)  ! densified poly
-   REAL(kind=real_t),ALLOCATABLE :: Vert0(:,:) ! org. poly
+!-----------------------------------------------------------------------
+TYPE BounDescrip2D !< 2D boundary description as a winding polygon
+   INTEGER(kind=idx_t) :: NumVert !< number of vertices along polygon
+   INTEGER(kind=idx_t) :: NumVert0 !< original number of vertices along polygon
+   INTEGER(kind=idx_t) :: DIM !< redundant (dimension of the program
+   REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)  !< densified poly
+   REAL(kind=real_t),ALLOCATABLE :: Vert0(:,:) !< org. poly
 ENDTYPE
+!-----------------------------------------------------------------------
 
-TYPE(BounDescrip2D) :: PSLG 
+!-----------------------------------------------------------------------
+TYPE GridData !< container for raster fields
+    REAL(real_t),ALLOCATABLE :: vals(:,:)  !< discrete values of size function 
+    REAL(real_t) ::   delta !< grid spacing in 
+    INTEGER(idx_t) :: ni,nj  !< dimension of raster 
+END TYPE 
+!-----------------------------------------------------------------------
+
+TYPE(GridData) :: SzFx !< for the size of elements in the domain 
+
+TYPE(BounDescrip2D) :: PSLG !< read in from disk
 
 ! error conditions 
 integer(kind=idx_t) :: ierr 
+
+CONTAINS 
+
+!-----------------------------------------------------------------------
+INTEGER(idx_t) FUNCTION LengthString(String) Result(StringLength) 
+!-----------------------------------------------------------------------
+IMPLICIT NONE
+CHARACTER(*),INTENT(IN) :: String
+INTEGER(idx_t) :: I
+StringLength = -1 !default is -1 just because.
+DO I=LEN(String), 1, -1
+  IF(String(I:I) .ne. ' ') THEN
+     StringLength = I
+     EXIT
+  ENDIF
+ENDDO
+!-----------------------------------------------------------------------
+END FUNCTION LengthString 
+!-----------------------------------------------------------------------
 
 
 END MODULE VARS 

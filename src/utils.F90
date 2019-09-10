@@ -13,6 +13,7 @@ use vars
 
 implicit none
 
+
 !-----------------------------------------------------------------------
 !>@brief AN ISOTROPIC MESH SIZE FUNCTION 
 !>       this is defined by the user in YourMeshSize.F90 module
@@ -22,7 +23,7 @@ ABSTRACT INTERFACE
         import real_t
         real(kind=real_t) :: sz
         real(kind=real_t), intent (in) :: p(2)
-    end function IsoSZ
+     end function IsoSZ
 !-----------------------------------------------------------------------
 END INTERFACE
 !----------------------------begin of c-interface-----------------------
@@ -382,12 +383,13 @@ END SUBROUTINE ApplyForces
 !>        You can comment out the default Bossens-Heckbert potential function
 !>        for the spring-based force function. 
 !-----------------------------------------------------------------------
-SUBROUTINE CalcForces(HFX,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
+SUBROUTINE CalcForces(HFX,MeshSizes,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS
 REAL(real_t) :: HFX  ! Mesh Size function 
+TYPE(GridData),INTENT(IN) :: MeshSizes
 INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
@@ -412,7 +414,7 @@ DO I = 1,NUMBARS
   ! To calculate edgelength, assume edge extrues along ideal length 
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   ME = CalcMetricTensor(MIDPT(1:2,1)) ! query metric tensor at midpoint
-  HBARS(I,1)=HFX(MIDPT(1:2,1)) ! query the ideal element size
+  HBARS(I,1)=HFX(MIDPT(1:2,1),MeshSizes) ! query the ideal element size
   ! assume ideal edge extrudes at ideal angle 
   a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
   ! a = CalcIdealAngle(MIDPT(1:2,1)) 
@@ -761,28 +763,38 @@ END SUBROUTINE WriteMesh
 !>        'PSLG.txt' into derived type BounDescrip2D. Interpolate points on boundary 
 !>         so spacing between two points does nto exceed LMIN/2
 !-----------------------------------------------------------------------
-SUBROUTINE ReadPSLGtxt(PSLG,LMIN) 
+FUNCTION ReadPSLGtxt(fname,lmin) RESULT(PSLG) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS 
+CHARACTER(80),intent(in) :: fname
 REAL(real_t),INTENT(IN) :: LMIN       
 
 ! OUTPUTS
-TYPE(BounDescrip2D),INTENT(OUT) :: PSLG 
+TYPE(BounDescrip2D) :: PSLG 
 
 ! LOCAL TO SUBROUTINE 
-logical :: fileFound 
-integer :: tempNP,tempDIM
-integer :: i 
+INTEGER(idx_t) :: LenFN
+logical        :: fileFound 
+integer        :: tempNP,tempDIM
+integer        :: i 
 
-INQUIRE(FILE='PSLG.txt',EXIST=fileFound)
+! get length of the fname containing the pslg data 
+LenFN = LengthString(fname)
+IF(LenFN .lt. 1) THEN 
+  write(*,'(A)') "FATAL: FNAME of PSLG is invalid." 
+  stop
+ENDIF !error out
+
+! check if it exists 
+INQUIRE(FILE=fname(1:LenFN),EXIST=fileFound)
 
 IF(fileFound) THEN
-  OPEN(UNIT=1,FILE='PSLG.txt',ACTION='READ')
+  OPEN(UNIT=1,FILE=fname(1:LenFN),ACTION='READ')
   READ(1,*) tempNP,tempDIM ! number of points in file  
   WRITE(*,'(A)') "********************************************************"
-  WRITE(*,'(A,I5,A,I5,A)') "INFO: Reading PSLG file called PSLG.txt with " &  
+  WRITE(*,'(A,A,A,I5,A,I5,A)') "INFO: Reading PSLG file called ",fname(1:LenFN)," with " &  
       //" ",tempNP," points in ",tempDIM," dimensions."
 
   ALLOCATE(PSLG%Vert(tempNP,tempDIM))
@@ -792,10 +804,10 @@ IF(fileFound) THEN
     READ(1,*) PSLG%Vert(I,1),PSLG%Vert(I,2)
   ENDDO
   CLOSE(1)
-  WRITE(*,'(A)') "INFO: Read PSLG file succesfully!"
+  WRITE(*,'(3A)') "INFO: Read PSLG file called ",fname(1:LenFN)," succesfully!"
   WRITE(*,'(A)') "********************************************************"
 ELSE
-  WRITE(*,'(A)') "FATAL: PSLG.txt file not found"
+  WRITE(*,'(3A)') "FATAL: ",fname(1:LenFN) ," file not found."
   WRITE(*,'(A)') "********************************************************"
   STOP  
 ENDIF
@@ -803,7 +815,7 @@ ENDIF
 CALL densify(LMIN/2.0d0,PSLG) 
 
 !-----------------------------------------------------------------------
-END SUBROUTINE ReadPSLGtxt 
+END FUNCTION ReadPSLGtxt 
 !-----------------------------------------------------------------------
 
 
@@ -811,11 +823,12 @@ END SUBROUTINE ReadPSLGtxt
 !> @brief Form initial points to fill in the domain according to mesh size function
 !>         This corresponds with steps 1 to 2 of the distmesh algorithm. 
 !-----------------------------------------------------------------------
-subroutine FormInitialPoints2D(HFX,DIM,PSLG,LMIN,IPTS,NP)
+subroutine FormInitialPoints2D(HFX,MeshSizes,DIM,PSLG,LMIN,IPTS,NP)
 implicit none 
 
 ! INPUTS 
 REAL(real_t)                   :: HFX  ! Mesh Size function 
+TYPE(GridData)                 :: MeshSizes
 INTEGER(idx_t),INTENT(IN)      :: DIM
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 REAL(real_t),INTENT(IN)        :: LMIN       
@@ -934,7 +947,7 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
-  H=HFX(IPTS(I,:))
+  H=HFX(IPTS(I,:),MeshSizes)
   !print *,"BEFORE ",H 
   ME = CalcMetricTensor(IPTS(I,:)) 
   ! assume ideal edge extrudes at ideal angle 
@@ -1041,7 +1054,6 @@ END SUBROUTINE DelTriaWElim
 
 
 
-
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
@@ -1049,6 +1061,8 @@ END SUBROUTINE DelTriaWElim
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
+
+
 
 
 !> @brief Given an array of triangular facets, organize them in a 
@@ -1575,14 +1589,13 @@ end subroutine quicksortINT
 !-----------------------------------------------------------------------
 
 
+!> @brief quicksort.f -*-f90-*-
+!> Author: t-nissie
+!> License: GPLv3
+!> Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
 !-----------------------------------------------------------------------
 recursive subroutine quicksortINTLONG(a, first, last,idx)
 !-----------------------------------------------------------------------
-! quicksort.f -*-f90-*-
-! Author: t-nissie
-! License: GPLv3
-! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
-!
   implicit none
   integer(8)  a(*), x, t
   integer first, last,tt
@@ -1612,16 +1625,14 @@ end subroutine quicksortINTLONG
 !-----------------------------------------------------------------------
 
 
+!-----------------------------------------------------------------------
+!> @brief quicksort.f -*-f90-*-
+!> Author: t-nissie
+!> License: GPLv3
+!> Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
+!-----------------------------------------------------------------------
 recursive subroutine quicksortREAL(a, first, last)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! quicksort.f -*-f90-*-
-! Author: t-nissie
-! License: GPLv3
-! Gist: https://gist.github.com/t-nissie/479f0f16966925fa29ea
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!
+!-----------------------------------------------------------------------
   implicit none
   real(8)  a(*), x, t
   integer first, last
@@ -1644,15 +1655,17 @@ recursive subroutine quicksortREAL(a, first, last)
   end do
   if (first < i-1) call quicksortREAL(a, first, i-1)
   if (j+1 < last)  call quicksortREAL(a, j+1, last)
-end subroutine quicksortREAL
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
 
+!-----------------------------------------------------------------------
+end subroutine quicksortREAL
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!> @brief the median of a vector of reals 
+!-----------------------------------------------------------------------
 function median(a,first,last)
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! the median of a vector of reals 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-----------------------------------------------------------------------
 IMPLICIT NONE
 
 ! INPUTS 
@@ -1685,8 +1698,12 @@ endif
 
 deallocate(at)
 
+!-----------------------------------------------------------------------
 end function median
-!*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*!
+!-----------------------------------------------------------------------
 
+
+!-----------------------------------------------------------------------
 END MODULE UTILS
+!-----------------------------------------------------------------------
 

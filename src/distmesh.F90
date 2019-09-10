@@ -9,14 +9,18 @@ USE utils
 USE vars 
 
 IMPLICIT NONE
-integer :: lastNumFlips
 REAL(8) :: TS,TF
 
 MaxIter = 1000                                               ! Maximum number of iterations
 
-CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
+PSLG = ReadPSLGtxt('PSLG.txt',LMIN)                          ! Load in boundary description 
 
-CALL FormInitialPoints2D(MeshSize,DIM,PSLG,LMIN,POINTS,NP)  ! Create initial points to iterate on
+stop 
+SzFx = LoadMeshSizes('MeshSizes.txt')                        ! Load size function into memory
+
+stop 
+
+CALL FormInitialPoints2D(MeshSize,SzFx,DIM,PSLG,LMIN,POINTS,NP)  ! Create initial points to iterate on
 
 CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS)              ! Compute Delaunay triangulation of point set with masking
 
@@ -54,7 +58,7 @@ DO
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
 
   ! Calculate forces on bars
-  CALL CalcForces(MeshSize,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
+  CALL CalcForces(MeshSize,SzFx,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 
   ! Move points based on forces
   CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
