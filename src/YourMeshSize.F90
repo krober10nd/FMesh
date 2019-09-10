@@ -33,11 +33,13 @@ ME(1,1) = 1.0d0
 ME(2,2) = 1.0d0
 ! create a simple smooth variation in anisotropicness 
 if(POINTS(1).GT.-2.0d0.AND.POINTS(1).LT.0.0d0) THEN 
-  ME(2,2)= MAXVAL((/5.0d0,ABS((2.0d0+points(1))*2.0d0+1.0d0)/))
+  ME(2,2)= (2.0d0+points(1))*2.0d0+1.0d0
 elseif(POINTS(1).GT.0.0d0.AND.POINTS(1).LT.2.0d0) THEN
-  ME(2,2)= ABS((2.0d0-points(1))*2.0d0+1.0d0) 
+  ME(2,2)= (2.0d0-points(1))*2.0d0+1.0d0
+elseif(POINTS(1).LT.EPSILON(1.0d0).AND.POINTS(1).GT.-EPSILON(1.0d0)) THEN
+  ME(2,2)=4.0d0
 endif
-
+ME(2,2)=MAXVAL((/ 1.0d0,ME(2,2)/))
 
 !ME(2,2) = 10.d0
 END FUNCTION 

@@ -12,7 +12,7 @@ IMPLICIT NONE
 integer :: lastNumFlips
 REAL(8) :: TS,TF
 
-MaxIter = 1000                                               ! Maximum number of iterations
+MaxIter = 200                                               ! Maximum number of iterations
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
