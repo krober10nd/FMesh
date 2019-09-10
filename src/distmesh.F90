@@ -12,7 +12,7 @@ IMPLICIT NONE
 integer :: lastNumFlips
 REAL(8) :: TS,TF
 
-MaxIter = 200                                               ! Maximum number of iterations
+MaxIter = 1000                                               ! Maximum number of iterations
 
 CALL ReadPSLGtxt(PSLG,LMIN)                                 ! Read in boundary description 
 
@@ -28,7 +28,7 @@ WRITE(*,'(A)') "                                      "
 
 ITER    = 1 ! iteration counter 
 DELTAT  = 0.10d0
-NSCREEN = 1 ! Number of times to write data to disk
+NSCREEN = 10 ! Number of times to write data to disk
 
 DO 
   CALL CPU_TIME(TS) 
