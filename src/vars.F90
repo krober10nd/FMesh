@@ -52,6 +52,7 @@ TYPE GridData !< container for raster fields
     REAL(real_t),ALLOCATABLE :: vals(:,:)  !< discrete values of size function 
     REAL(real_t) ::   delta !< grid spacing in 
     INTEGER(idx_t) :: ni,nj  !< dimension of raster 
+    REAL(real_t) :: x0y0(2) !< bottom left corner coordinate
 END TYPE 
 !-----------------------------------------------------------------------
 

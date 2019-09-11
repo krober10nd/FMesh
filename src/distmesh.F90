@@ -10,13 +10,21 @@ USE vars
 
 IMPLICIT NONE
 REAL(8) :: TS,TF
+CHARACTER(100) :: pslgfname
+CHARACTER(100) :: sizefname
+
+IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
+  WRITE(*,*)'ERROR, COMMAND-LINE ARGUMENTS REQUIRED, STOPPING'
+  STOP
+ENDIF
+CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
+CALL GET_COMMAND_ARGUMENT(2,sizefname)   
 
 MaxIter = 1000                                               ! Maximum number of iterations
 
-PSLG = ReadPSLGtxt('PSLG.txt',LMIN)                          ! Load in boundary description 
+PSLG = ReadPSLGtxt(pslgfname,LMIN)                          ! Load in boundary description 
 
-stop 
-SzFx = LoadMeshSizes('MeshSizes.txt')                        ! Load size function into memory
+SzFx = LoadMeshSizes(sizefname)                        ! Load size function into memory
 
 stop 
 

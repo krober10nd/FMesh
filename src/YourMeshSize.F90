@@ -58,8 +58,14 @@ INQUIRE(FILE=fname(1:LenFN),EXIST=fileFound)
 
 IF(fileFound) THEN
   OPEN(UNIT=1,FILE=fname(1:LenFN),ACTION='READ')
- ! READ HEADER 
-  READ(1,*) SzFx%Ni,SzFx%Nj,SzFx%delta 
+  ! READ HEADER 
+  READ(1,*) SzFx%Ni,SzFx%Nj,SzFx%delta,SzFx%x0y0(1),SzFx%x0y0(2)
+  WRITE(*,'(A)') "********************************************************"
+  WRITE(*,'(3A,I5,A)') "INFO: Reading mesh sizes file called ",fname(1:LenFN)," with " &  
+      //" ",SzFx%Ni*SzFx%Nj," points."
+
+  WRITE(*,'(A)') "********************************************************"
+
   ALLOCATE(SzFx%Vals(SzFx%Ni,SzFx%Nj))
   SzFx%Vals=-9999.d0 
   DO J=1,SzFx%Nj
@@ -68,7 +74,7 @@ IF(fileFound) THEN
     ENDDO
   ENDDO
 ELSE
-  WRITE(*,'(A)') "FATAL: ",fname(1:LenFN) ," file not found."
+  WRITE(*,'(3A)') "FATAL: ",fname(1:LenFN) ," file not found."
   WRITE(*,'(A)') "********************************************************"
   STOP  
 ENDIF
@@ -139,9 +145,9 @@ FUNCTION LinearInterp2D(Qp,MeshSizes) RESULT(InterpVal)
 !-----------------------------------------------------------------------
 IMPLICIT NONE 
 
-REAL(real_t)        :: InterpVal
+REAL(real_t)  :: InterpVal
 TYPE(GridData),INTENT(IN)  :: MeshSizes
-REAL(real_t),INTENT(IN)        :: QP(2)
+REAL(real_t),INTENT(IN)  :: QP(2)
 
 REAL(real_t)   :: interp_lat, interp_lon
 REAL(real_t)   :: ri,rj,dlat,dlon,dataint,trueval
@@ -149,8 +155,8 @@ REAL(real_t)   :: wx,wy
 INTEGER(idx_t) :: ileft,iright,jbot,jtop
 INTEGER(idx_t) :: i,j
 
-rj=Qp(2)/(MeshSizes%Ni+1)
-ri=Qp(1)/(MeshSizes%Nj+1)
+rj=(Qp(2)-MeshSizes%x0y0(2))/(MeshSizes%Ni+1)
+ri=(Qp(1)-MeshSizes%x0y0(1))/(MeshSizes%Nj+1)
 
 ileft=int(ri)
 iright=ileft+1

@@ -768,7 +768,7 @@ FUNCTION ReadPSLGtxt(fname,lmin) RESULT(PSLG)
 implicit none 
 
 ! INPUTS 
-CHARACTER(80),intent(in) :: fname
+CHARACTER(*),intent(in) :: fname
 REAL(real_t),INTENT(IN) :: LMIN       
 
 ! OUTPUTS
