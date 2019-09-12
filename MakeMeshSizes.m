@@ -4,7 +4,8 @@ dx =0.1 ;
 [xg,yg]=meshgrid(-5:dx:5,-5:dx:5);
 
 sz = xg.^2 + yg.^2 ;
-sz(sz>=0) = 0.05 ; 
+sz(sz<0.01) = 0.01 ; 
+sz(sz>0.15) = 0.15 ; 
 figure; pcolor(xg,yg,sz); shading interp
 min(sz(:))
 max(sz(:))
@@ -25,7 +26,7 @@ fid = fopen('ElongSizes.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',101,101,0.1,-5.0,-5.0) ; 
 for i = 1 : 101
     for j = 1 : 101 
-       fprintf(fid,'%f ', 1.0); 
+       fprintf(fid,'%f ', 10.0); 
     end
     fprintf(fid,'\n') ; 
 end
@@ -35,7 +36,7 @@ fid = fopen('Angles.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',101,101,0.1,-5.0,-5.0) ; 
 for i = 1 : 101
     for j = 1 : 101 
-       fprintf(fid,'%f ',60.0) ; 
+       fprintf(fid,'%f ',45.0) ; 
     end
     fprintf(fid,'\n') ; 
 end

@@ -100,7 +100,7 @@ ENDIF
 
 CALL GET_COMMAND_ARGUMENT(2,sizefname)   
 CALL GET_COMMAND_ARGUMENT(3,elongfname)                    
-CALL GET_COMMAND_ARGUMENT(3,anglefname)                    
+CALL GET_COMMAND_ARGUMENT(4,anglefname)                    
 
 SzFx    = LoadMeshSizes(sizefname)                           ! Load size function into memory
 ElongFx = LoadMeshElong(elongfname)                          ! Load in elongation factors into memory
@@ -108,6 +108,10 @@ AngleFx = LoadMeshAngle(anglefname)                          ! Load in angles in
 
 CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
 PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
+
+SizingFields%Iso = SzFx 
+SizingFields%Elong = ElongFx
+SizingFields%Angle = AngleFx
 
 !-----------------------------------------------------------------------
 END FUNCTION ParseInputs
@@ -848,11 +852,10 @@ END FUNCTION ReadPSLGtxt
 !> @brief Form initial points to fill in the domain according to mesh size function
 !>         This corresponds with steps 1 to 2 of the distmesh algorithm. 
 !-----------------------------------------------------------------------
-subroutine FormInitialPoints2D(HFX,SzFields,PSLG,IPTS,NP)
+subroutine FormInitialPoints2D(SzFields,PSLG,IPTS,NP)
 implicit none 
 
 ! INPUTS 
-REAL(real_t)                   :: HFX
 TYPE(MetricTensor),INTENT(IN)  :: SzFields 
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 
@@ -965,8 +968,11 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
+
 DO I = 1,NP
-  H=HFX(IPTS(I,:),SzFields)
+
+  H=CalcMeshSize(IPTS(I,:),SzFields)
+
   ME=CalcMetricTensor(IPTS(I,:),SzFields)
   
   ! assume ideal edge extrudes at ideal angle 

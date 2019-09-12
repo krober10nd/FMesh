@@ -18,24 +18,20 @@ IMPLICIT NONE
 MaxIter = 300 ! Maximum number of iterations
 ITER    = 1 ! intialize iteration counter 
 DELTAT  = 0.05d0 ! psuedo-timestep
-NSCREEN = 5 ! number of times to write data to disk
+NSCREEN = 1 ! number of times to write data to disk
 !--------------------------------------------------
 
 SzFields=ParseInputs()                                       ! Load in all sizing fields 
 
-CALL FormInitialPoints2D(CalcMeshSize,SzFields,PSLG, &
-                        POINTS,NP)                           ! Create initial points to iterate on
+CALL FormInitialPoints2D(SzFields,PSLG,POINTS,NP)             ! Create initial points to iterate on
 
 CALL DelTriaWElim(PSLG,NP,POINTS,NF,TRIAS)                   ! Compute Delaunay triangulation of point set with masking
-
-stop
 
 CALL TriaToTria(NF,TRIAS,T2T,T2N)                            ! Calculate the triangle adj. matrices
 
 WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
 WRITE(*,'(A)') "                                      "
-
 
 DO 
   CALL CPU_TIME(TS) 
