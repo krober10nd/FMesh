@@ -32,6 +32,7 @@ integer(kind=idx_t) :: NF    ! number of facets in mesh
 integer(kind=idx_t) :: NumBars ! number of edges in the mesh 
 integer(kind=idx_t) :: NumFlips ! counts the number of edge flips per iteration
 integer(kind=idx_t) :: lastNumFlips ! in the last iteration, the number of edge flips
+integer(kind=idx_t) :: ITFlips ! number of iterations spent flipping
 
 REAL(kind=real_t)   :: BBOX(4) ! bounding box coords. Top left and bot. right. 
 

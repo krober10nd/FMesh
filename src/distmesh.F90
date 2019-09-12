@@ -15,9 +15,8 @@ IMPLICIT NONE
 !--------------------------------------------------
 ! THESE SHOULD BECOME INPUT FILE PARAMETERS
 !--------------------------------------------------
-MaxIter = 300 ! Maximum number of iterations
-ITER    = 1 ! intialize iteration counter 
-DELTAT  = 0.05d0 ! psuedo-timestep
+MaxIter = 600 ! Maximum number of iterations
+DELTAT  = 0.01d0 ! psuedo-timestep
 NSCREEN = 1 ! number of times to write data to disk
 !--------------------------------------------------
 
@@ -33,20 +32,26 @@ WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
 WRITE(*,'(A)') "                                      "
 
+ITER    = 1                                                  ! intialize iteration counter 
+
 DO 
   CALL CPU_TIME(TS) 
 
   ! Perform edge flips to achieve Del.-hood
-  NumFlips=99999;
+      NumFlips=99999
   LastNumFlips=99999
+      ITFlips =1
   DO WHILE(NUMFLIPS.GT.0) 
     CALL edgeFlipper(SzFields,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
     IF(LastNumFlips.EQ.NumFlips) THEN 
-      EXIT ! stuck lets get out of here! 
+      EXIT ! stuck..
+    ENDIF
+    ITFlips = ITFlips + 1
+    IF(ITFlips.EQ.20) THEN
+      EXIT ! stuck..
     ENDIF
     LastNumFlips=NumFlips 
     ! TODO check for any overlapped elements, will need to lower timestep?
-    ! TODO check if stuck repeating the same number of iterations 
   ENDDO
   
   ! Output of the current mesh
