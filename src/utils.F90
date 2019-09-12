@@ -98,10 +98,10 @@ CONTAINS
 
 
 
-
 !-----------------------------------------------------------------------
 !> @brief Flips edges to achieve Delaunay triangulation based on metric tensor.
 !> @param[in]     DIM       problem dimension 
+!> @param[in]   ELONGFX     contains the spatially-variable elongation factor
 !> @param[in]     NP        number of points in triangulation
 !> @param[in]     POINTS    vertices of the triangulation
 !> @param[in]     NF        number of faces in the triangulation
@@ -110,9 +110,10 @@ CONTAINS
 !> @param[inout]  T2T       table of tria.-to-tria. adj.
 !> @param[out]    NUMFLIPS  number of edge flips that were performed 
 !-----------------------------------------------------------------------
-SUBROUTINE edgeFlipper(DIM,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
+SUBROUTINE edgeFlipper(DIM,ElongFx,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
 !-----------------------------------------------------------------------
 INTEGER(idx_t),INTENT(IN)                :: DIM,NP,NF 
+TYPE(GridData),INTENT(IN)                :: ElongFx
 REAL(real_t),  INTENT(IN),ALLOCATABLE    :: POINTS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
@@ -170,7 +171,7 @@ DO T1 = 1,NF
       pmid(2) = pmid(2)/6.0d0
 
       ! eval metric tensor at mdpt 
-      ME = CalcMetricTensor(pmid) 
+      ME = CalcMetricTensor(pmid,ElongFx) 
 
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
@@ -333,13 +334,14 @@ IF(NOUT.GT.0) THEN
     ENDIF
   ENDDO
 
-ENDIF
-
-! RELEASE ALLOCATABLES 
-DEALLOCATE(DistOut,PointsOut)
 DEALLOCATE(dgradx,dgrady,dgrad2)
 DEALLOCATE(tempDistx,tempDisty) 
 DEALLOCATE(tempP1,tempP2)
+
+ENDIF
+
+! RELEASE ALLOCATABLES 
+DEALLOCATE(InoOut,DistOut,PointsOut)
 
 !-----------------------------------------------------------------------
 END SUBROUTINE ProjectPointsBack 
@@ -383,13 +385,14 @@ END SUBROUTINE ApplyForces
 !>        You can comment out the default Bossens-Heckbert potential function
 !>        for the spring-based force function. 
 !-----------------------------------------------------------------------
-SUBROUTINE CalcForces(HFX,MeshSizes,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
+SUBROUTINE CalcForces(HFX,MeshSizes,ElongSizes,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS
 REAL(real_t) :: HFX  ! Mesh Size function 
 TYPE(GridData),INTENT(IN) :: MeshSizes
+TYPE(GridData),INTENT(IN) :: ElongSizes
 INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
@@ -413,7 +416,7 @@ FORCES=0.0d0
 DO I = 1,NUMBARS
   ! To calculate edgelength, assume edge extrues along ideal length 
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  ME = CalcMetricTensor(MIDPT(1:2,1)) ! query metric tensor at midpoint
+  ME = CalcMetricTensor(MIDPT(1:2,1),ElongSizes) ! query metric tensor at midpoint
   HBARS(I,1)=HFX(MIDPT(1:2,1),MeshSizes) ! query the ideal element size
   ! assume ideal edge extrudes at ideal angle 
   a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
@@ -763,13 +766,13 @@ END SUBROUTINE WriteMesh
 !>        'PSLG.txt' into derived type BounDescrip2D. Interpolate points on boundary 
 !>         so spacing between two points does nto exceed LMIN/2
 !-----------------------------------------------------------------------
-FUNCTION ReadPSLGtxt(fname,lmin) RESULT(PSLG) 
+FUNCTION ReadPSLGtxt(fname,SzFx) RESULT(PSLG) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS 
 CHARACTER(*),intent(in) :: fname
-REAL(real_t),INTENT(IN) :: LMIN       
+TYPE(GridData),intent(in) :: SzFx       
 
 ! OUTPUTS
 TYPE(BounDescrip2D) :: PSLG 
@@ -812,7 +815,7 @@ ELSE
   STOP  
 ENDIF
 
-CALL densify(LMIN/2.0d0,PSLG) 
+CALL densify(SzFx%LMIN/2.0d0,PSLG) 
 
 !-----------------------------------------------------------------------
 END FUNCTION ReadPSLGtxt 
@@ -823,15 +826,15 @@ END FUNCTION ReadPSLGtxt
 !> @brief Form initial points to fill in the domain according to mesh size function
 !>         This corresponds with steps 1 to 2 of the distmesh algorithm. 
 !-----------------------------------------------------------------------
-subroutine FormInitialPoints2D(HFX,MeshSizes,DIM,PSLG,LMIN,IPTS,NP)
+subroutine FormInitialPoints2D(HFX,MeshSizes,ElongSizes,DIM,PSLG,IPTS,NP)
 implicit none 
 
 ! INPUTS 
 REAL(real_t)                   :: HFX  ! Mesh Size function 
 TYPE(GridData)                 :: MeshSizes
+TYPE(GridData)                 :: ElongSizes
 INTEGER(idx_t),INTENT(IN)      :: DIM
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
-REAL(real_t),INTENT(IN)        :: LMIN       
 
 ! OUTPUTS 
 REAL(real_t),INTENT(OUT),ALLOCATABLE :: IPTS(:,:)
@@ -840,6 +843,7 @@ INTEGER(idx_t),INTENT(OUT) :: NP
 ! local to subroutine 
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
 REAL(real_t)   :: ME(1:2,1:2)
+REAL(real_t)   :: LMIN
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
@@ -851,6 +855,8 @@ REAL(real_t)             :: a,b
 REAL(real_t)             :: temp
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
+
+LMIN = MeshSizes%LMIN 
 
 ! 1. Create initial distribution in bounding box (equilateral triangles)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -872,8 +878,6 @@ WRITE(*,'(A)') "********************************************************"
 WRITE(*,'(A,F6.3,A,F6.3,A,F6.3,A,F6.3)') "INFO: Domain extents are: " &  
        //" XMIN: ",BBOX(1)," XMAX: ",BBOX(2), " " & 
        //" YMIN: ",BBOX(3)," YMAX: ",BBOX(4) 
-WRITE(*,'(A)') "********************************************************"
-WRITE(*,'(A)') "                                      "
 
 ALLOCATE(XVEC(NX),YVEC(NY))
 
@@ -926,30 +930,25 @@ DO I = 1,NP
   CALL FPNPOLY(PSLG,IPTS(I,:),INoOUT(I))
 ENDDO
 
-!GEPS = 0.01d0 * LMIN  ! this is how it was in DistMesh
-
 ! Remove points with dist > geps (mark them)
 DO I = 1,NP
-!  IF(Dist(I).GT.GEPS) THEN 
   IF(INoOUT(I).EQ.0) THEN 
     IPTS(I,1) = -9999.d0
     IPTS(I,2) = -9999.d0
   ENDIF
 ENDDO
 
-!DEALLOCATE(DIST,XG,YG,XVEC,YVEC) 
 DEALLOCATE(INoOUT,XG,YG,XVEC,YVEC) 
 
 ! push them to the back of the array
 CALL PushZerosToBackREAL(IPTS,NP)
-!
+
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
   H=HFX(IPTS(I,:),MeshSizes)
-  !print *,"BEFORE ",H 
-  ME = CalcMetricTensor(IPTS(I,:)) 
+  ME = CalcMetricTensor(IPTS(I,:),ElongSizes)
   ! assume ideal edge extrudes at ideal angle 
   a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
   VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-0.0d0*H(1,1)) ! cos(a)
@@ -958,7 +957,6 @@ DO I = 1,NP
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   H=SQRT(temp2) 
-  !print *,"AFTER ",H 
   r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
 ENDDO
 a = maxval(r0) 
@@ -972,7 +970,10 @@ ENDDO
 
 CALL PushZerosToBackREAL(IPTS,NP)
 
-print *, NP 
+WRITE(*,'(A,I8,A)') "INFO: There are ",NP," initial points in the domain."
+WRITE(*,'(A)') "********************************************************"
+WRITE(*,'(A)') "                                      "
+
 
 !-----------------------------------------------------------------------
 END SUBROUTINE FormInitialPoints2D

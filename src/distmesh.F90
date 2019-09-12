@@ -1,46 +1,51 @@
 !-----------------------------------------------------------------------
-!> @brief Serial DistMesh algorithm in FORTRAN
-!>        to build a mesh in 2d or 3d.
+! PROGRAM DISTMESH 
 !-----------------------------------------------------------------------
-PROGRAM DistMesh
+!> @brief Serial DistMesh algorithm to build a mesh in 2d or 3d.
 !-----------------------------------------------------------------------
-USE YourMeshSize ! contains your mesh size function queried during execution
+PROGRAM DISTMESH 
+!-----------------------------------------------------------------------
+
+USE YourMeshSize 
 USE utils 
 USE vars 
 
 IMPLICIT NONE
-REAL(8) :: TS,TF
-CHARACTER(100) :: pslgfname
-CHARACTER(100) :: sizefname
 
+! ARGUMENT PARSING GOES HERE !
+! TODO MAKE THIS INTO A SUBROUTINE 
 IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
   WRITE(*,*)'ERROR, COMMAND-LINE ARGUMENTS REQUIRED, STOPPING'
   STOP
 ENDIF
 CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
 CALL GET_COMMAND_ARGUMENT(2,sizefname)   
+CALL GET_COMMAND_ARGUMENT(3,elongfname)                    
+SzFx = LoadMeshSizes(sizefname)                              ! Load size function into memory
+PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
+ElongFx = LoadElongation(elongfname)                         ! Load in elongation into memory
+! ARGUMENT PARSING ENDS HERE !
 
-MaxIter = 1000                                               ! Maximum number of iterations
 
-PSLG = ReadPSLGtxt(pslgfname,LMIN)                          ! Load in boundary description 
+CALL FormInitialPoints2D(MeshSize,SzFx,ElongFx,DIM,PSLG,POINTS,NP)   ! Create initial points to iterate on
 
-SzFx = LoadMeshSizes(sizefname)                        ! Load size function into memory
+IF(NP.LT.3) THEN 
+  WRITE(*,'(A)') "FATAL: NOT ENOUGH INITIAL POINTS TO MESH" 
+  STOP
+ENDIF
 
-stop 
+CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS)               ! Compute Delaunay triangulation of point set with masking
 
-CALL FormInitialPoints2D(MeshSize,SzFx,DIM,PSLG,LMIN,POINTS,NP)  ! Create initial points to iterate on
-
-CALL DelTriaWElim(DIM,PSLG,NP,POINTS,NF,TRIAS)              ! Compute Delaunay triangulation of point set with masking
-
-CALL TriaToTria(NF,TRIAS,T2T,T2N)                           ! Calculate the triangle adj. matrices
+CALL TriaToTria(NF,TRIAS,T2T,T2N)                            ! Calculate the triangle adj. matrices
 
 WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
 WRITE(*,'(A)') "                                      "
 
-ITER    = 1 ! iteration counter 
-DELTAT  = 0.10d0
-NSCREEN = 10 ! Number of times to write data to disk
+MaxIter = 300 ! Maximum number of iterations
+ITER    = 1 ! intialize iteration counter 
+DELTAT  = 0.05d0 ! psuedo-timestep
+NSCREEN = 5 ! number of times to write data to disk
 
 DO 
   CALL CPU_TIME(TS) 
@@ -49,12 +54,13 @@ DO
   NUMFLIPS=99999;
   LastNumFlips=99999
   DO WHILE(NUMFLIPS.GT.0) 
-    CALL edgeFlipper(DIM,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
+    CALL edgeFlipper(DIM,ElongFx,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
     IF(LastNumFlips.EQ.NumFlips) THEN 
       EXIT ! stuck lets get out of here! 
     ENDIF
     LastNumFlips=NumFlips 
-    ! check for any overlapped elements, will need to lower timestep Z
+    ! check for any overlapped elements, will need to lower timestep?
+    ! check if stuck repeating the same number of iterations 
   ENDDO
   
   ! Output of the current mesh
@@ -66,7 +72,7 @@ DO
   CALL findUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
 
   ! Calculate forces on bars
-  CALL CalcForces(MeshSize,SzFx,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
+  CALL CalcForces(MeshSize,SzFx,ElongFx,DIM,POINTS,NP,BARS,NUMBARS,FVEC)
 
   ! Move points based on forces
   CALL ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
@@ -96,5 +102,5 @@ WRITE(*,'(A,I8,A,I8,A)')"INFO: " &
 CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
 
 !-----------------------------------------------------------------------
-END PROGRAM 
+END PROGRAM DISTMESH
 !-----------------------------------------------------------------------

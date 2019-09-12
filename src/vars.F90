@@ -6,10 +6,16 @@
 MODULE VARS 
 !-----------------------------------------------------------------------
 use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_float, c_double, c_ptr
+
 implicit none
 
 integer, parameter, public :: idx_t = c_int32_t
 integer, parameter, public :: real_t = c_double
+
+REAL(real_t) :: TS,TF ! < variables for timing each iteration of distmesh
+CHARACTER(100) :: pslgfname !< filename of PSLG data
+CHARACTER(100) :: sizefname !< filename of mesh sizes data.
+CHARACTER(100) :: elongfname !< filename of elongation data.
 
 ! Later on this should become a derived type 
 integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [nf x dim+1] array of point indices 
@@ -53,17 +59,25 @@ TYPE GridData !< container for raster fields
     REAL(real_t) ::   delta !< grid spacing in 
     INTEGER(idx_t) :: ni,nj  !< dimension of raster 
     REAL(real_t) :: x0y0(2) !< bottom left corner coordinate
+    REAL(real_t) :: LMIN !< minimum element size in domain
 END TYPE 
 !-----------------------------------------------------------------------
 
+
 TYPE(GridData) :: SzFx !< for the size of elements in the domain 
+
+TYPE(GridData) :: ElongFx !< for the elongation of elements in the domain 
 
 TYPE(BounDescrip2D) :: PSLG !< read in from disk
 
-! error conditions 
-integer(kind=idx_t) :: ierr 
+
+
+PUBLIC LengthString 
+
+!---------------------end of data declarations--------------------------------
 
 CONTAINS 
+
 
 !-----------------------------------------------------------------------
 INTEGER(idx_t) FUNCTION LengthString(String) Result(StringLength) 
@@ -83,4 +97,6 @@ END FUNCTION LengthString
 !-----------------------------------------------------------------------
 
 
+!-----------------------------------------------------------------------
 END MODULE VARS 
+!-----------------------------------------------------------------------
