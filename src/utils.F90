@@ -8,24 +8,11 @@
 !-----------------------------------------------------------------------
 MODULE UTILS 
 !-----------------------------------------------------------------------
-use YourMeshSize
 use vars
+use YourMeshSize
 
 implicit none
 
-
-!-----------------------------------------------------------------------
-!>@brief AN ISOTROPIC MESH SIZE FUNCTION 
-!>       this is defined by the user in YourMeshSize.F90 module
-!-----------------------------------------------------------------------
-ABSTRACT INTERFACE
-     function IsoSZ(P)
-        import real_t
-        real(kind=real_t) :: sz
-        real(kind=real_t), intent (in) :: p(2)
-     end function IsoSZ
-!-----------------------------------------------------------------------
-END INTERFACE
 !----------------------------begin of c-interface-----------------------
 INTERFACE
 !-----------------------------------------------------------------------
@@ -99,21 +86,48 @@ CONTAINS
 
 
 !-----------------------------------------------------------------------
+FUNCTION ParseInputs() RESULT(SizingFields)
+!-----------------------------------------------------------------------
+IMPLICIT NONE 
+
+TYPE(MetricTensor) :: SizingFields 
+
+IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
+  WRITE(*,*)'ERROR, COMMAND-LINE ARGUMENTS REQUIRED, STOPPING'
+  STOP
+ENDIF
+
+CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
+PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
+
+CALL GET_COMMAND_ARGUMENT(2,sizefname)   
+CALL GET_COMMAND_ARGUMENT(3,elongfname)                    
+CALL GET_COMMAND_ARGUMENT(3,anglefname)                    
+
+SzFx    = LoadMeshSizes(sizefname)                           ! Load size function into memory
+ElongFx = LoadMeshElong(elongfname)                          ! Load in elongation factors into memory
+AngleFx = LoadMeshAngle(anglefname)                          ! Load in angles into memory  
+
+!-----------------------------------------------------------------------
+END SUBROUTINE ParseInputs
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
 !> @brief Flips edges to achieve Delaunay triangulation based on metric tensor.
-!> @param[in]     DIM       problem dimension 
-!> @param[in]   ELONGFX     contains the spatially-variable elongation factor
-!> @param[in]     NP        number of points in triangulation
-!> @param[in]     POINTS    vertices of the triangulation
-!> @param[in]     NF        number of faces in the triangulation
-!> @param[inout]  FACETS    table vertex indices describing faces 
-!> @param[inout]  T2N       table of vertex index not shared in nei. tria.
-!> @param[inout]  T2T       table of tria.-to-tria. adj.
-!> @param[out]    NUMFLIPS  number of edge flips that were performed 
+!> @param[in]   MetricTensor contains the spatially-variable elongation factor
+!> @param[in]     NP         number of points in triangulation
+!> @param[in]     POINTS     vertices of the triangulation
+!> @param[in]     NF         number of faces in the triangulation
+!> @param[inout]  FACETS     table vertex indices describing faces 
+!> @param[inout]  T2N        table of vertex index not shared in nei. tria.
+!> @param[inout]  T2T        table of tria.-to-tria. adj.
+!> @param[out]    NUMFLIPS   number of edge flips that were performed 
 !-----------------------------------------------------------------------
-SUBROUTINE edgeFlipper(DIM,ElongFx,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
+SUBROUTINE edgeFlipper(MetricTensor,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
 !-----------------------------------------------------------------------
-INTEGER(idx_t),INTENT(IN)                :: DIM,NP,NF 
-TYPE(GridData),INTENT(IN)                :: ElongFx
+INTEGER(idx_t),INTENT(IN)                :: NP,NF 
+TYPE(MetricTensor),INTENT(IN)            :: ElongFx
 REAL(real_t),  INTENT(IN),ALLOCATABLE    :: POINTS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
@@ -826,14 +840,12 @@ END FUNCTION ReadPSLGtxt
 !> @brief Form initial points to fill in the domain according to mesh size function
 !>         This corresponds with steps 1 to 2 of the distmesh algorithm. 
 !-----------------------------------------------------------------------
-subroutine FormInitialPoints2D(HFX,MeshSizes,ElongSizes,DIM,PSLG,IPTS,NP)
+subroutine FormInitialPoints2D(HFX,SzFields,PSLG,IPTS,NP)
 implicit none 
 
 ! INPUTS 
-REAL(real_t)                   :: HFX  ! Mesh Size function 
-TYPE(GridData)                 :: MeshSizes
-TYPE(GridData)                 :: ElongSizes
-INTEGER(idx_t),INTENT(IN)      :: DIM
+REAL(real_t)                   :: HFX
+TYPE(MetricTensor),INTENT(IN)  :: SzFields 
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 
 ! OUTPUTS 
@@ -847,7 +859,6 @@ REAL(real_t)   :: LMIN
 REAL(real_t),ALLOCATABLE :: xvec(:),yvec(:)
 REAL(real_t),ALLOCATABLE :: xg(:,:)
 REAL(real_t),ALLOCATABLE :: yg(:,:)
-!REAL(real_t),ALLOCATABLE :: Dist(:)
 INTEGER(idx_t),ALLOCATABLE:: INoOUT(:) 
 REAL(real_t),ALLOCATABLE :: R0(:,:)
 REAL(real_t)             :: H(1:1,1:1)
@@ -855,8 +866,10 @@ REAL(real_t)             :: a,b
 REAL(real_t)             :: temp
 INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
+INTEGER(idx_t)           :: DIM
 
-LMIN = MeshSizes%LMIN 
+LMIN = SzFields%Iso%LMIN
+DIM  = PSLG%DIM
 
 ! 1. Create initial distribution in bounding box (equilateral triangles)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -922,8 +935,6 @@ ENDDO
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);                % Rejection method.
 ! N=size(p,1);                                         % Number of initial points.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!  Can we just call inpoly instead?
-!CALL CalcSignedDistance(IPTS,PSLG,Dist) 
 ALLOCATE(INoOUT(NP)) 
 INoOUT = 0
 DO I = 1,NP 
@@ -948,11 +959,16 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
   H=HFX(IPTS(I,:),MeshSizes)
-  ME = CalcMetricTensor(IPTS(I,:),ElongSizes)
+  ME=CalcMetricTensor(IPTS(I,:),SzFields)
+  
   ! assume ideal edge extrudes at ideal angle 
-  a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
-  VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-0.0d0*H(1,1)) ! cos(a)
-  VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-1.0d0*H(1,1)) ! sin(a)
+  A = CalcMeshAngle(IPTS(I,:),SzFields) 
+  A = COS(A) ! in radians 
+  A = 180.d0/3.14 ! in degrees  
+  VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-A*H(1,1)) ! cos(a)
+  A = SIN(A) ! in radians 
+  A = 180.d0/3.14 ! in degrees  
+  VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-A*H(1,1)) ! sin(a)
   VEC1 = transpose(VEC1_t) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
@@ -970,6 +986,11 @@ ENDDO
 
 CALL PushZerosToBackREAL(IPTS,NP)
 
+IF(NP.LT.3) THEN 
+  WRITE(*,'(A)') "FATAL: NOT ENOUGH INITIAL POINTS TO MESH" 
+  STOP
+ENDIF
+
 WRITE(*,'(A,I8,A)') "INFO: There are ",NP," initial points in the domain."
 WRITE(*,'(A)') "********************************************************"
 WRITE(*,'(A)') "                                      "
@@ -985,13 +1006,12 @@ END SUBROUTINE FormInitialPoints2D
 !>        removes triangles with centroids outside of the PSLG 
 !>        Organizes the vertices in ccw order.
 !-----------------------------------------------------------------------
-SUBROUTINE DelTriaWElim(DIM,PSLG, NP, POINTS, NF, FACETS)
+SUBROUTINE DelTriaWElim(PSLG, NP, POINTS, NF, FACETS)
 !-----------------------------------------------------------------------
 use iso_c_binding, only : c_f_pointer,C_PTR
 implicit none
 
 ! INPUTS 
-integer(kind=idx_t), intent(in) :: DIM
 integer(kind=idx_t), intent(in) :: NP
 real(kind=real_t),   intent(in),ALLOCATABLE :: POINTS(:,:)
 integer(kind=idx_t), intent(inout):: NF
@@ -1005,20 +1025,18 @@ INTEGER(kind=idx_t) :: INoOUT
 type(c_ptr) :: cfacetemp
 integer(kind=idx_t),pointer :: ffacetemp(:)
 real(real_t),allocatable :: CENTROIDS(:,:)
-real(8) :: blah1,blah2
 
 integer :: i,j,k
+integer :: dim 
+
+DIM = PSLG%DIM 
 
 ! call qhull library 
-CALL CPU_TIME(blah1) 
 cfacetemp = faces(DIM,NP,TRANSPOSE(POINTS),NF)
-CALL CPU_TIME(blah2) 
-!print *, blah2 - blah1 
 
 CALL C_F_POINTER(cfacetemp, ffacetemp, [NF*(DIM+1)])
 
 ! reshape vector ffacetemp to facets array
-! TODO: check if it's possible to allocate to memory with an error condition
 allocate(facets(NF,DIM+1))
 
 facets=0 
@@ -1062,7 +1080,6 @@ END SUBROUTINE DelTriaWElim
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
 !-----------------------------------------------------------------------
-
 
 
 

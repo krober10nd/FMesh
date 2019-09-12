@@ -13,9 +13,11 @@ integer, parameter, public :: idx_t = c_int32_t
 integer, parameter, public :: real_t = c_double
 
 REAL(real_t) :: TS,TF ! < variables for timing each iteration of distmesh
+
 CHARACTER(100) :: pslgfname !< filename of PSLG data
 CHARACTER(100) :: sizefname !< filename of mesh sizes data.
 CHARACTER(100) :: elongfname !< filename of elongation data.
+CHARACTER(100) :: anglefname !< filename of angle data.
 
 ! Later on this should become a derived type 
 integer(kind=idx_t),allocatable :: trias(:,:)  ! facet table [nf x dim+1] array of point indices 
@@ -47,11 +49,12 @@ INTEGER(kind=idx_t) :: iter,MaxIter,nscreen
 TYPE BounDescrip2D !< 2D boundary description as a winding polygon
    INTEGER(kind=idx_t) :: NumVert !< number of vertices along polygon
    INTEGER(kind=idx_t) :: NumVert0 !< original number of vertices along polygon
-   INTEGER(kind=idx_t) :: DIM !< redundant (dimension of the program
+   INTEGER(kind=idx_t) :: DIM !< dimension of problem
    REAL(kind=real_t),ALLOCATABLE :: Vert(:,:)  !< densified poly
    REAL(kind=real_t),ALLOCATABLE :: Vert0(:,:) !< org. poly
 ENDTYPE
 !-----------------------------------------------------------------------
+
 
 !-----------------------------------------------------------------------
 TYPE GridData !< container for raster fields
@@ -64,12 +67,23 @@ END TYPE
 !-----------------------------------------------------------------------
 
 
+!-----------------------------------------------------------------------
+TYPE MetricTensor !< container for all the raster fields
+   TYPE(GridData) :: Iso !< isotropic sizes 
+   TYPE(GridData) :: Angle !< angle of elongation 
+   TYPE(GridData) :: Elong !< factor of elongation 
+END TYPE 
+!-----------------------------------------------------------------------
+
 TYPE(GridData) :: SzFx !< for the size of elements in the domain 
 
 TYPE(GridData) :: ElongFx !< for the elongation of elements in the domain 
 
-TYPE(BounDescrip2D) :: PSLG !< read in from disk
+TYPE(GridData) :: AngleFx !< for the orientation of elements in the domain 
 
+TYPE(MetricTensor) :: SzFields !< container for all atributes of the metric tensor
+
+TYPE(BounDescrip2D) :: PSLG !< read in from disk
 
 
 PUBLIC LengthString 
