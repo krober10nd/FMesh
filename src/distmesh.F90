@@ -23,11 +23,12 @@ NSCREEN = 5 ! number of times to write data to disk
 
 SzFields=ParseInputs()                                       ! Load in all sizing fields 
 
-CALL FormInitialPoints2D(CalcMeshSize,SzFields,PSLG,POINTS,NP)! Create initial points to iterate on
-
-stop
+CALL FormInitialPoints2D(CalcMeshSize,SzFields,PSLG, &
+                        POINTS,NP)                           ! Create initial points to iterate on
 
 CALL DelTriaWElim(PSLG,NP,POINTS,NF,TRIAS)                   ! Compute Delaunay triangulation of point set with masking
+
+stop
 
 CALL TriaToTria(NF,TRIAS,T2T,T2N)                            ! Calculate the triangle adj. matrices
 

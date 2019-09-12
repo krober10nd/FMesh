@@ -97,8 +97,6 @@ IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
   STOP
 ENDIF
 
-CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
-PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
 
 CALL GET_COMMAND_ARGUMENT(2,sizefname)   
 CALL GET_COMMAND_ARGUMENT(3,elongfname)                    
@@ -107,6 +105,9 @@ CALL GET_COMMAND_ARGUMENT(3,anglefname)
 SzFx    = LoadMeshSizes(sizefname)                           ! Load size function into memory
 ElongFx = LoadMeshElong(elongfname)                          ! Load in elongation factors into memory
 AngleFx = LoadMeshAngle(anglefname)                          ! Load in angles into memory  
+
+CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
+PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
 
 !-----------------------------------------------------------------------
 END FUNCTION ParseInputs
