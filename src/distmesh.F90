@@ -54,14 +54,14 @@ DO
   
   ! Output of the current mesh
   IF(MOD(ITER,NSCREEN).EQ.0.OR.ITER.EQ.1) THEN
-    CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
+    CALL WriteMesh(POINTS,NP,TRIAS,NF,ITER)
   ENDIF
   
   ! Describe each bar by a unique pair of nodes
-  CALL FindUniqueBars(DIM,NF,TRIAS,NUMBARS,BARS)
+  CALL FindUniqueBars(NF,TRIAS,NUMBARS,BARS)
 
   ! Calculate forces on bars
-  CALL CalcForces(MeshSize,SzFields,POINTS,NP,BARS,NUMBARS,FVEC)
+  CALL CalcForces(SzFields,POINTS,NP,BARS,NUMBARS,FVEC)
 
   ! Move points based on forces
   CALL ApplyForces(POINTS,NP,BARS,NUMBARS,FVEC) 
@@ -88,7 +88,7 @@ WRITE(*,'(A,I8,A,I8,A)')"INFO: " &
 //" FINAL MESH HAS ",NP," VERTICES " &
 //" AND ",NF," FACES "
 
-CALL WriteMesh(DIM,POINTS,NP,TRIAS,NF,ITER)
+CALL WriteMesh(POINTS,NP,TRIAS,NF,ITER)
 
 !-----------------------------------------------------------------------
 END PROGRAM DISTMESH

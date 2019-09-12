@@ -8,8 +8,8 @@
 !-----------------------------------------------------------------------
 MODULE UTILS 
 !-----------------------------------------------------------------------
-use vars
 use YourMeshSize
+use vars
 
 implicit none
 
@@ -109,7 +109,7 @@ ElongFx = LoadMeshElong(elongfname)                          ! Load in elongatio
 AngleFx = LoadMeshAngle(anglefname)                          ! Load in angles into memory  
 
 !-----------------------------------------------------------------------
-END SUBROUTINE ParseInputs
+END FUNCTION ParseInputs
 !-----------------------------------------------------------------------
 
 
@@ -124,7 +124,7 @@ END SUBROUTINE ParseInputs
 !> @param[inout]  T2T        table of tria.-to-tria. adj.
 !> @param[out]    NUMFLIPS   number of edge flips that were performed 
 !-----------------------------------------------------------------------
-SUBROUTINE edgeFlipper(MetricTensor,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
+SUBROUTINE edgeFlipper(ElongFx,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
 !-----------------------------------------------------------------------
 INTEGER(idx_t),INTENT(IN)                :: NP,NF 
 TYPE(MetricTensor),INTENT(IN)            :: ElongFx
@@ -269,16 +269,15 @@ END SUBROUTINE edgeFlipper
 !-----------------------------------------------------------------------
 !> @brief Projects vertices that have exited the domain back into the domain
 !>        using the path of steepest descent in the signed distance function.
-!> @param[in]         DIM     problem dimension 
 !> @param[in]          NP     number of points in the mesh
 !> @param[in]        PSLG     planar-straight line graph 
 !> @param[inout]   POINTS     coordinates of points in the mesh.
 !-----------------------------------------------------------------------
-SUBROUTINE ProjectPointsBack(DIM,PSLG,POINTS,NP)
+SUBROUTINE ProjectPointsBack(PSLG,POINTS,NP)
 !-----------------------------------------------------------------------
 IMPLICIT NONE 
 
-INTEGER(idx_t),INTENT(IN) :: DIM , NP 
+INTEGER(idx_t),INTENT(IN) :: NP 
 TYPE(BounDescrip2D),INTENT(IN) :: PSLG 
 REAL(real_t),INTENT(INOUT),ALLOCATABLE :: POINTS(:,:)
 
@@ -290,6 +289,7 @@ REAL(real_t),ALLOCATABLE :: tempDistx(:),tempDisty(:)
 REAL(real_t),ALLOCATABLE :: tempP1(:,:),tempP2(:,:)
 REAL(real_t),ALLOCATABLE :: PointsOut(:,:),DistOut(:)
 INTEGER(idx_t),ALLOCATABLE :: INoOUT(:) 
+INTEGER(idx_t) :: DIM =2
 
 DEPS = SQRT(EPSILON(1.d0)) 
 
@@ -365,12 +365,12 @@ END SUBROUTINE ProjectPointsBack
 !-----------------------------------------------------------------------
 !> @brief Update vertex locations according to calculated forces. 
 !-----------------------------------------------------------------------
-SUBROUTINE ApplyForces(DIM,POINTS,NP,BARS,NUMBARS,FVEC)
+SUBROUTINE ApplyForces(POINTS,NP,BARS,NUMBARS,FVEC)
 !-----------------------------------------------------------------------
 IMPLICIT NONE 
 
 ! INPUTS 
-INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS 
+INTEGER(idx_t),INTENT(IN) :: NP,NUMBARS 
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: FVEC(:,:)
 
@@ -399,15 +399,13 @@ END SUBROUTINE ApplyForces
 !>        You can comment out the default Bossens-Heckbert potential function
 !>        for the spring-based force function. 
 !-----------------------------------------------------------------------
-SUBROUTINE CalcForces(HFX,MeshSizes,ElongSizes,DIM,POINTS,NP,BARS,NUMBARS,FVEC) 
+SUBROUTINE CalcForces(MeshSizes,POINTS,NP,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS
-REAL(real_t) :: HFX  ! Mesh Size function 
-TYPE(GridData),INTENT(IN) :: MeshSizes
-TYPE(GridData),INTENT(IN) :: ElongSizes
-INTEGER(idx_t),INTENT(IN) :: DIM,NP,NUMBARS
+TYPE(MetricTensor),INTENT(IN) :: MeshSizes
+INTEGER(idx_t),INTENT(IN) :: NP,NUMBARS
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 
@@ -416,32 +414,40 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
-REAL(real_t)   :: barvec(NUMBARS,DIM)
+REAL(real_t)   :: barvec(NUMBARS,2)
 REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
 REAL(real_t)   :: FORCES(1:NUMBARS)
 REAL(real_t)   :: HBARS(1:NUMBARS,1:1)
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
 REAL(real_t)   :: midpt(1:2,1:1),a,b,SCALE_FACTOR
 REAL(real_t)   :: ME(1:2,1:2)
+INTEGER(idx_t) :: DIM=2 
 
+DIM = 2
 ALLOCATE(FVEC(NUMBARS,2))
 ! L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
   ! To calculate edgelength, assume edge extrues along ideal length 
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  ME = CalcMetricTensor(MIDPT(1:2,1),ElongSizes) ! query metric tensor at midpoint
-  HBARS(I,1)=HFX(MIDPT(1:2,1),MeshSizes) ! query the ideal element size
+  ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint
+  HBARS(I,1)=CalcMeshSize(MIDPT(1:2,1),MeshSizes) ! query the ideal isotropic element size
+
   ! assume ideal edge extrudes at ideal angle 
-  a = 0 ! assume ideal bar is  horizontal for now (future, we will get this from mesh size fx)
-  ! a = CalcIdealAngle(MIDPT(1:2,1)) 
-  VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-0.0d0*HBARS(I,1)) ! cos(a)
-  VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-1.0d0*HBARS(I,1)) ! sin(a)
+  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
+  A = COS(A) ! in radians 
+  A = 180.d0/3.14 ! in degrees  
+  VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-A*HBARS(I,1)) ! cos(a)
+
+  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
+  A = SIN(A) ! in radians 
+  A = 180.d0/3.14 ! in degrees  
+  VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-A*HBARS(I,1)) ! sin(a)
+
   VEC1 = transpose(VEC1_t) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
   HBARS(I:I,1:1)=SQRT(temp2) 
-
 
   ! compute the actual length in metric space 
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
@@ -642,12 +648,12 @@ END SUBROUTINE TriaToTria
 !>        bars=[t(:,[1,2]);t(:,[1,3]);t(:,[2,3])];         
 !>        bars=unique(sort(bars,2),'rows');      
 !-----------------------------------------------------------------------
-SUBROUTINE findUniqueBars(DIM,NF,FACES,NumBars,BARS) 
+SUBROUTINE FindUniqueBars(NF,FACES,NumBars,BARS) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUT 
-INTEGER(idx_t),INTENT(IN) :: DIM,NF 
+INTEGER(idx_t),INTENT(IN) :: NF 
 INTEGER(idx_T),INTENT(IN),ALLOCATABLE :: FACES(:,:)
 
 ! OUTPUT 
@@ -734,14 +740,14 @@ END SUBROUTINE findUniqueBars
 
 !> @brief Write the mesh to disk.
 !-----------------------------------------------------------------------
-SUBROUTINE WriteMesh(DIM,POINTS,NP,FACETS,NF,ITER)
+SUBROUTINE WriteMesh(POINTS,NP,FACETS,NF,ITER)
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUT 
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:) 
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: FACETS(:,:) 
-INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM,ITER
+INTEGER(idx_t),INTENT(IN) :: NF,NP,ITER
 
 ! OUTPUT 
 ! WRITES SEVERAL TEXT FILES WITH POINTS AND FACETS 
@@ -749,6 +755,7 @@ INTEGER(idx_t),INTENT(IN) :: NF,NP,DIM,ITER
 ! LOCAL 
 INTEGER(idx_t) :: i 
 CHARACTER(14) :: filename
+INTEGER(idx_t) :: DIM=2
 
 IF(DIM.EQ.2) THEN 
   WRITE(filename,'(a,i4.4,a)') "POINTS",ITER,".TXT"
@@ -958,7 +965,7 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
-  H=HFX(IPTS(I,:),MeshSizes)
+  H=HFX(IPTS(I,:),SzFields)
   ME=CalcMetricTensor(IPTS(I,:),SzFields)
   
   ! assume ideal edge extrudes at ideal angle 

@@ -221,7 +221,7 @@ END FUNCTION CalcMeshSize
 !-----------------------------------------------------------------------
 !> @brief Calls the bilinear interpolant to determine mesh elongation
 !-----------------------------------------------------------------------
-FUNCTION CalcMeshElongation(POINTS,SzFx) Result(MeshElong)
+FUNCTION CalcMeshElong(POINTS,SzFx) Result(MeshElong)
 !-----------------------------------------------------------------------
 real(real_t):: MeshElong
 type(MetricTensor),intent(in):: SzFx
@@ -230,7 +230,7 @@ real(real_t),intent(in) :: points(2)
 MeshElong = LinearInterp2D(points,SzFx%Elong)
 
 !-----------------------------------------------------------------------
-END FUNCTION CalcMeshElongation
+END FUNCTION CalcMeshElong
 !-----------------------------------------------------------------------
 
 
@@ -263,19 +263,20 @@ type(MetricTensor),intent(in) :: SzFx
 real(real_t) :: MeshAngle,MeshElong
 real(real_t) :: rot(1:2,1:2),rot_inv(1:2,1:2),elong(1:2,1:2)
 real(real_t) :: temp1(1:2,1:2)
+real(real_t) :: A,B
 
 MeshAngle = CalcMeshAngle(points,SzFx) 
 MeshElong = CalcMeshElong(points,SzFx) 
 
 A = COS(MeshAngle)*(180.0d0/3.14d0)
-B = SIN(MeshAngle)*(180.0d0/3.14d0
+B = SIN(MeshAngle)*(180.0d0/3.14d0)
 
 rot(1,1) =  A
 rot(2,2) =  A
 rot(1,2) =  B
 rot(2,1) = -B
  
-rot_inv = MatInv(Rot) ; 
+rot_inv = MatInv2(Rot) 
 
 elong(1:2,1:2) = 0.d0  ! off-diag
 elong(1,1) = MeshElong ! only principal direc
@@ -346,9 +347,9 @@ END FUNCTION LinearInterp2D
 !-----------------------------------------------------------------------
   pure function matinv2(A) result(B)
 !-----------------------------------------------------------------------
-    complex(wp), intent(in) :: A(2,2)   !! Matrix
-    complex(wp)             :: B(2,2)   !! Inverse matrix
-    complex(wp)             :: detinv
+    real(real_t), intent(in) :: A(2,2)   !! Matrix
+    real(real_t)             :: B(2,2)   !! Inverse matrix
+    real(real_t)             :: detinv
 
     ! Calculate the inverse determinant of the matrix
     detinv = 1/(A(1,1)*A(2,2) - A(1,2)*A(2,1))
