@@ -12,17 +12,9 @@ USE vars
 
 IMPLICIT NONE
 
-!--------------------------------------------------
-! THESE SHOULD BECOME INPUT FILE PARAMETERS
-!--------------------------------------------------
-MaxIter = 600 ! Maximum number of iterations
-DELTAT  = 0.01d0 ! psuedo-timestep
-NSCREEN = 1 ! number of times to write data to disk
-!--------------------------------------------------
+SzFields=ParseInputs()                                       ! Parse Mesh.inp and load in all sizing fields 
 
-SzFields=ParseInputs()                                       ! Load in all sizing fields 
-
-CALL FormInitialPoints2D(SzFields,PSLG,POINTS,NP)             ! Create initial points to iterate on
+CALL FormInitialPoints2D(SzFields,PSLG,POINTS,NP)            ! Create initial points to iterate on
 
 CALL DelTriaWElim(PSLG,NP,POINTS,NF,TRIAS)                   ! Compute Delaunay triangulation of point set with masking
 
@@ -32,15 +24,14 @@ WRITE(*,'(A)') "                                      "
 WRITE(*,'(A)') "****************BEGIN ITERATING*************************"
 WRITE(*,'(A)') "                                      "
 
-ITER    = 1                                                  ! intialize iteration counter 
+ITER    = 1                                                  ! Intialize iteration counter 
 
+CALL CPU_TIME(TS) 
 DO 
-  CALL CPU_TIME(TS) 
+  CALL CPU_TIME(TSiter) 
 
   ! Perform edge flips to achieve Del.-hood
-      NumFlips=99999
-  LastNumFlips=99999
-      ITFlips =1
+  NumFlips=99999; LastNumFlips=99999 ; ITFlips =1
   DO WHILE(NUMFLIPS.GT.0) 
     CALL edgeFlipper(SzFields,NP,POINTS,NF,TRIAS,T2N,T2T,NUMFLIPS) 
     IF(LastNumFlips.EQ.NumFlips) THEN 
@@ -71,8 +62,10 @@ DO
   ! Bring outside points back to the boundary
   CALL ProjectPointsBack(PSLG,POINTS,NP)
   
-  CALL CPU_TIME(TF) 
-  WRITE(*,'(A,F12.8)') "INFO: ELAPSED TIME IS: ",TF-TS 
+  CALL CPU_TIME(TFiter) 
+  IF(MOD(ITER,NSCREEN).EQ.0.OR.ITER.EQ.1) THEN
+    WRITE(*,'(A,F12.8)') "INFO: ELAPSED TIME IS: ",TFiter-TSiter 
+  ENDIF
    
   ! Termination criterion: reached max iterations. 
   IF(ITER.EQ.MaxIter) THEN
@@ -85,6 +78,9 @@ DO
   WRITE(*,'(A,I4,A)') "INFO: ITERATION: ",ITER," COMPLETE"
 
 ENDDO
+
+CALL CPU_TIME(TF) 
+WRITE(*,'(A,F12.8)') "INFO: ELAPSED TIME FOR MESH GENERATION IS: ",TF-TS 
 
 WRITE(*,'(A,I8,A,I8,A)')"INFO: " & 
 //" FINAL MESH HAS ",NP," VERTICES " &

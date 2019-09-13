@@ -91,6 +91,24 @@ FUNCTION ParseInputs() RESULT(SizingFields)
 IMPLICIT NONE 
 
 TYPE(MetricTensor) :: SizingFields 
+LOGICAL :: FileFound=.FALSE.
+
+! check if it exists 
+INQUIRE(FILE="Mesh.inp",EXIST=fileFound)
+
+IF(fileFound) THEN
+  OPEN(UNIT=1,FILE="Mesh.inp",ACTION='READ')
+  READ(1,*) MaxIter
+  READ(1,*) DeltaT 
+  READ(1,*) NSCREEN  
+ELSE
+  WRITE(*,'(3A)') "FATAL: Mesh.inp control file not found."
+  WRITE(*,'(A)') "********************************************************"
+  WRITE(*,'(A)') "                                                        "
+  STOP  
+ENDIF
+CLOSE(1)
+
 
 IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
   WRITE(*,*)'ERROR, COMMAND-LINE ARGUMENTS REQUIRED, STOPPING'
@@ -264,7 +282,7 @@ DO T1 = 1,NF
   ENDDO
 ENDDO
 
-print *, "NUMFLIPS : ", numflips
+!  print *, "NUMFLIPS : ", numflips
 
 !-----------------------------------------------------------------------
 END SUBROUTINE edgeFlipper 

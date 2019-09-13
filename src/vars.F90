@@ -12,7 +12,8 @@ implicit none
 integer, parameter, public :: idx_t = c_int32_t
 integer, parameter, public :: real_t = c_double
 
-REAL(real_t) :: TS,TF ! < variables for timing each iteration of distmesh
+REAL(real_t) :: TSiter,TFiter ! < variables for timing each iteration of distmesh
+REAL(real_t) :: TS,TF ! < variables for timing all iterations of distmesh
 
 CHARACTER(100) :: pslgfname !< filename of PSLG data
 CHARACTER(100) :: sizefname !< filename of mesh sizes data.

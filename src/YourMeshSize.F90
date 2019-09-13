@@ -282,7 +282,8 @@ rot(2,2) =  A
 rot(1,2) =  B
 rot(2,1) = -B
  
-rot_inv = MatInv2(Rot) 
+!rot_inv = MatInv2(Rot) 
+rot_inv  = TRANSPOSE(Rot) 
 
 elong(1:2,1:2) = 0.d0  ! off-diag
 elong(1,1) = MeshElong ! only principal direc
@@ -328,11 +329,18 @@ INTEGER(idx_t) :: i,j
 rj=(Qp(2)-MeshSizes%x0y0(2))/MeshSizes%delta+1
 ri=(Qp(1)-MeshSizes%x0y0(1))/MeshSizes%delta+1
 
-ileft=int(ri)
-iright=ileft+1
+rj=minval((/rj,DBLE(MeshSizes%nj)/)) ! ensure it's not above the top 
+rj=maxval((/rj,1.0d0/)) ! it's not below the bottom  
 
-jbot=int(rj)
-jtop=jbot+1
+ri=minval((/ri,DBLE(MeshSizes%ni)/)) !not past the right
+ri=maxval((/ri,1.0d0/)) !not past the left side 
+
+! ensure points are always in bounds
+ileft=maxval((/int(ri),1/)) 
+iright=minval((/ileft+1,MeshSizes%ni/))
+
+jbot=maxval((/int(rj),1/))
+jtop=minval((/jbot+1,MeshSizes%nj/))
 
 wx=ri-int(ri)
 wy=rj-int(rj)
@@ -353,18 +361,18 @@ END FUNCTION LinearInterp2D
 !-----------------------------------------------------------------------
   pure function matinv2(A) result(B)
 !-----------------------------------------------------------------------
-    real(real_t), intent(in) :: A(2,2)   !! Matrix
-    real(real_t)             :: B(2,2)   !! Inverse matrix
-    real(real_t)             :: detinv
+real(real_t), intent(in) :: A(2,2)   !! Matrix
+real(real_t)             :: B(2,2)   !! Inverse matrix
+real(real_t)             :: detinv
 
-    ! Calculate the inverse determinant of the matrix
-    detinv = 1/(A(1,1)*A(2,2) - A(1,2)*A(2,1))
+! Calculate the inverse determinant of the matrix
+detinv = 1/(A(1,1)*A(2,2) - A(1,2)*A(2,1))
 
-    ! Calculate the inverse of the matrix
-    B(1,1) = +detinv * A(2,2)
-    B(2,1) = -detinv * A(2,1)
-    B(1,2) = -detinv * A(1,2)
-    B(2,2) = +detinv * A(1,1)
+! Calculate the inverse of the matrix
+B(1,1) = +detinv * A(2,2)
+B(2,1) = -detinv * A(2,1)
+B(1,2) = -detinv * A(1,2)
+B(2,2) = +detinv * A(1,1)
 !-----------------------------------------------------------------------
   end function matinv2
 !-----------------------------------------------------------------------
