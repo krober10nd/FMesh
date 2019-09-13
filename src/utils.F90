@@ -459,12 +459,12 @@ DO I = 1,NUMBARS
   ! assume ideal edge extrudes at ideal angle 
   A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
   A = COS(A) ! in radians 
-  A = 180.d0/3.14 ! in degrees  
+  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-A*HBARS(I,1)) ! cos(a)
 
   A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
   A = SIN(A) ! in radians 
-  A = 180.d0/3.14 ! in degrees  
+  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-A*HBARS(I,1)) ! sin(a)
 
   VEC1 = transpose(VEC1_t) 
@@ -996,10 +996,10 @@ DO I = 1,NP
   ! assume ideal edge extrudes at ideal angle 
   A = CalcMeshAngle(IPTS(I,:),SzFields) 
   A = COS(A) ! in radians 
-  A = 180.d0/3.14 ! in degrees  
+  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-A*H(1,1)) ! cos(a)
   A = SIN(A) ! in radians 
-  A = 180.d0/3.14 ! in degrees  
+  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-A*H(1,1)) ! sin(a)
   VEC1 = transpose(VEC1_t) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
