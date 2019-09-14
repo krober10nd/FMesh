@@ -2,7 +2,7 @@ close all; clc;
 
 t = []; p = []; 
 
-nscreen=10 ; maxiter=2e3 ; 
+nscreen=10 ; maxiter=100 ; 
 
 figure; 
 for i = nscreen:nscreen:maxiter

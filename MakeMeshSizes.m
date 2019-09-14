@@ -27,7 +27,7 @@ fid = fopen('MeshSizes.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ; 
 for i = 1 : nrows
     for j = 1 : ncols
-       fprintf(fid,'%f ', 5*dx) ; %sz(j,i)) ; 
+       fprintf(fid,'%f ', 2*dx) ; %sz(j,i)) ; 
     end
     fprintf(fid,'\n') ; 
 end
@@ -35,11 +35,11 @@ fclose(fid) ;
 
 %%
 % Next create the circle in the image.
-innerRadius = 0.40;
+innerRadius = 0.30;
 outerRadius = 0.50;
 array2D = (xg - 0).^2 ...
     + (yg - 0).^2;
-elong = 8 ; 
+elong = 10 ; 
 ringPixels = array2D >= innerRadius.^2 & array2D <= outerRadius.^2;
 ringPixels = double(ringPixels) ;
 ringPixels(ringPixels==1) = elong  ;

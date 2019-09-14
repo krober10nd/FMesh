@@ -451,25 +451,23 @@ ALLOCATE(FVEC(NUMBARS,2))
 ! L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
-  ! To calculate edgelength, assume edge extrues along ideal length 
+  ! To calculate ideal edgelength, assume edge extrues along ideal length 
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint
   HBARS(I,1)=CalcMeshSize(MIDPT(1:2,1),MeshSizes) ! query the ideal isotropic element size
 
-  ! assume ideal edge extrudes at ideal angle 
-  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
-  A = COS(A) ! in radians 
-  A = A*(180.d0/3.14d0) ! in degrees  
+  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) ! a is in radians
+  A = COS(A) 
   VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-A*HBARS(I,1)) ! cos(a)
 
-  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) 
-  A = SIN(A) ! in radians 
-  A = A*(180.d0/3.14d0) ! in degrees  
+  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) ! a is in radians
+  A = SIN(A) 
+  ! no elongation in y-direction hence b=1.0d0
   VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-A*HBARS(I,1)) ! sin(a)
 
+  ! compute ideal length 
   VEC1 = transpose(VEC1_t) 
-  temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
-  temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
+  temp2(1:1,1:1)=MATMUL(VEC1_t(1:1,1:2),VEC1(1:2,1:1))
   HBARS(I:I,1:1)=SQRT(temp2) 
 
   ! compute the actual length in metric space 
@@ -996,17 +994,20 @@ DO I = 1,NP
   ! assume ideal edge extrudes at ideal angle 
   A = CalcMeshAngle(IPTS(I,:),SzFields) 
   A = COS(A) ! in radians 
-  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-A*H(1,1)) ! cos(a)
+
+  A = CalcMeshAngle(IPTS(I,:),SzFields) 
   A = SIN(A) ! in radians 
-  A = A*(180.d0/3.14d0) ! in degrees  
   VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-A*H(1,1)) ! sin(a)
+
   VEC1 = transpose(VEC1_t) 
-  temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
-  temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
+  temp2(1:1,1:1)=MATMUL(VEC1_t(1:1,1:2),VEC1)
   H=SQRT(temp2) 
+
   r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
+
 ENDDO
+
 a = maxval(r0) 
 DO I = 1,NP 
   b = r0(i,1)/a
