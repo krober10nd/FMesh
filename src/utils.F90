@@ -16,8 +16,41 @@ implicit none
 !----------------------------begin of c-interface-----------------------
 INTERFACE
 !-----------------------------------------------------------------------
+!>@brief call the incircle2d Shewchuk predicate
+!-----------------------------------------------------------------------
+FUNCTION fincircle2d(a,b,c,d)bind(c,name='incircle2d')
+!-----------------------------------------------------------------------
+import real_t
+implicit none 
+real(kind=real_t) :: fincircle2d ! result of incircle test ( does d line in circle defined by a b and c?)
+real(kind=real_t) :: a(2)
+real(kind=real_t) :: b(2)
+real(kind=real_t) :: c(2)
+real(kind=real_t) :: d(2)
+!-----------------------------------------------------------------------
+END FUNCTION
+!-----------------------------------------------------------------------
+END INTERFACE
+!-----------------------------------------------------------------------
+INTERFACE
+!-----------------------------------------------------------------------
+!>@brief call the orient2d Shewchuk predicate.
+!-----------------------------------------------------------------------
+FUNCTION forient2d(a,b,c)bind(c,name='orient2d')
+import real_t
+implicit none
+real(kind=real_t) :: forient2d ! result of order test (does c lie to the right or left of b - a?) 
+real(kind=real_t),intent(in) :: a(2)
+real(kind=real_t),intent(in) :: b(2)
+real(kind=real_t),intent(in) :: c(2)
+!-----------------------------------------------------------------------
+END FUNCTION forient2d
+!-----------------------------------------------------------------------
+END INTERFACE
+!-----------------------------------------------------------------------
 !>@brief call the inpolygon algorithm written in c from fortran.
 !-----------------------------------------------------------------------
+INTERFACE
 FUNCTION pnpoly(NUMVERT, VERTx, VERTy, TESTx, TESTy)bind(c,name='pnpoly')
 import idx_t,real_t
 implicit none
@@ -115,21 +148,23 @@ IF(COMMAND_ARGUMENT_COUNT().LT.1)THEN
   STOP
 ENDIF
 
-
-CALL GET_COMMAND_ARGUMENT(2,sizefname)   
-CALL GET_COMMAND_ARGUMENT(3,elongfname)                    
+CALL GET_COMMAND_ARGUMENT(2,elongfname1)                    
+CALL GET_COMMAND_ARGUMENT(3,elongfname2)                    
 CALL GET_COMMAND_ARGUMENT(4,anglefname)                    
 
-SzFx    = LoadMeshSizes(sizefname)                           ! Load size function into memory
-ElongFx = LoadMeshElong(elongfname)                          ! Load in elongation factors into memory
-AngleFx = LoadMeshAngle(anglefname)                          ! Load in angles into memory  
+ElongFx1 = LoadMeshElong1(elongfname1)                          ! Load in elongation factors into memory
+ElongFx2 = LoadMeshElong2(elongfname2)                          ! Load in elongation factors into memory
+AngleFx  = LoadMeshAngle(anglefname)                             ! Load in angles into memory  
+
+SizingFields%Elong1 = ElongFx1
+SizingFields%Elong2 = ElongFx2
+SizingFields%Angle  = AngleFx
+
+! determine LMIN 
+LMIN = MINVAL((/SizingFields%ELONG1%LMIN,SizingFields%ELONG2%LMIN/))
 
 CALL GET_COMMAND_ARGUMENT(1,pslgfname)   
 PSLG = ReadPSLGtxt(pslgfname,SzFx)                           ! Load in boundary description 
-
-SizingFields%Iso = SzFx 
-SizingFields%Elong = ElongFx
-SizingFields%Angle = AngleFx
 
 !-----------------------------------------------------------------------
 END FUNCTION ParseInputs
@@ -138,7 +173,7 @@ END FUNCTION ParseInputs
 
 !-----------------------------------------------------------------------
 !> @brief Flips edges to achieve Delaunay triangulation based on metric tensor.
-!> @param[in]   MetricTensor contains the spatially-variable elongation factor
+!> @param[in]   MetricTensor contains the spatially-variable metric tensor
 !> @param[in]     NP         number of points in triangulation
 !> @param[in]     POINTS     vertices of the triangulation
 !> @param[in]     NF         number of faces in the triangulation
@@ -147,31 +182,32 @@ END FUNCTION ParseInputs
 !> @param[inout]  T2T        table of tria.-to-tria. adj.
 !> @param[out]    NUMFLIPS   number of edge flips that were performed 
 !-----------------------------------------------------------------------
-SUBROUTINE edgeFlipper(ElongFx,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
+SUBROUTINE edgeFlipper(SzGrid,NP,POINTS,NF,FACETS,T2N,T2T,NUMFLIPS) 
 !-----------------------------------------------------------------------
 INTEGER(idx_t),INTENT(IN)                :: NP,NF 
-TYPE(MetricTensor),INTENT(IN)            :: ElongFx
+TYPE(MetricTensor),INTENT(IN)            :: SzGrid
 REAL(real_t),  INTENT(IN),ALLOCATABLE    :: POINTS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2N(:,:)
 INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: T2T(:,:)
 INTEGER(idx_t),INTENT(INOUT)             :: numflips 
 
-INTEGER(idx_t) :: i
+INTEGER(idx_t) :: i,iv,ie,iee
 INTEGER(idx_t) :: t1
 INTEGER(idx_t) :: t2
 INTEGER(idx_t) :: n1,n2
 INTEGER(idx_t) :: tix11,tix12,tix13,tix21,tix22,tix23
 INTEGER(idx_t) :: newt(1:2,1:3) 
-INTEGER(idx_t) :: nbt,nbn
+INTEGER(idx_t) :: nbt,nbn,tempF(2)
 INTEGER(idx_t) :: mod3x1(1:3),mod3x2(1:3),mod3x3(1:3)
 REAL(real_t)   :: cp1,cp2
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),temp3(1:1,1:2),temp4(1:1,1:1)
 REAL(real_t)   :: edgeAV(1:2,1:1),edgeBV(1:2,1:1),edgeCV(1:2,1:1),edgeDV(1:2,1:1)
 REAL(real_t)   :: edgeCV_t(1:1,1:2),edgeAV_t(1:1,1:2)
-REAL(real_t)   :: ME(1:2,1:2)
+REAL(real_t)   :: ME(1:2,1:2),tME(1:2,1:2)
 REAL(real_t)   :: pmid(2)
 REAL(real_t)   :: test(1:1,1:1)
+
 LOGICAL        :: FLIP
 
 mod3x1(1:3)=(/2,3,1/)
@@ -198,17 +234,20 @@ DO T1 = 1,NF
       newt(1,1:3) = (/FACETS(t1,1),FACETS(t1,2),FACETS(t1,3) /)
       newt(2,1:3) = (/FACETS(t2,1),FACETS(t2,2),FACETS(t2,3) /)
 
-      ! compute midpoint of quadilateral of connected triangles 
-      pmid(1) = POINTS(NEWT(1,1),1)+POINTS(NEWT(1,2),1)+POINTS(NEWT(1,3),1)
-      pmid(1) = pmid(1)+POINTS(NEWT(2,1),1)+POINTS(NEWT(2,2),1)+POINTS(NEWT(2,3),1)
-      pmid(1) = pmid(1)/6.0d0
-      
-      pmid(2) = POINTS(NEWT(1,1),2)+POINTS(NEWT(1,2),2)+POINTS(NEWT(1,3),2)
-      pmid(2) = pmid(2)+POINTS(NEWT(2,1),2)+POINTS(NEWT(2,2),2)+POINTS(NEWT(2,3),2)
-      pmid(2) = pmid(2)/6.0d0
-
-      ! eval metric tensor at mdpt 
-      ME = CalcMetricTensor(pmid,ElongFx) 
+      ! eval metric tensor at all points of quad
+      ME=0.0d0
+      DO ie =1,2
+        DO iv =1,3
+          tME(1:2,1:2)=CalcMetricTensor(POINTS(NEWT(ie,iv),:),SzGrid) 
+          ME(1:2,1:2)=tME(1:2,1:2) + ME(1:2,1:2)
+        ENDDO
+      ENDDO
+      ! compute average metric tensor 
+      DO ie=1,2
+        DO iee=1,2
+          ME(ie,iee)=ME(ie,iee)/6.0d0
+        ENDDO
+      ENDDO
 
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
@@ -234,8 +273,9 @@ DO T1 = 1,NF
       temp3 = MATMUL(EDGEAV_t,ME) !1x2 x 2x2 result is 1x2
       temp4 = MATMUL(temp3,EDGEBV)!1x2 x 2x1 result is 1x1
 
+      ! in-circle predicate w/ metric tensor 
       test = (cp1*temp2) + (cp2*temp4) 
-      
+
       IF(test(1,1).GT.0.d0) THEN 
         FLIP=.TRUE.
       ENDIF
@@ -249,7 +289,7 @@ DO T1 = 1,NF
         ! Insert new triangles (with flipped edges)
         FACETS(T1,:) = NEWT(1,:) 
         FACETS(T2,:) = NEWT(2,:) 
-        
+
         ! Update t2t and t2n
         NBT = T2T(t2,tix21)
         NBN = T2N(t2,tix21) 
@@ -282,7 +322,7 @@ DO T1 = 1,NF
   ENDDO
 ENDDO
 
-!  print *, "NUMFLIPS : ", numflips
+print *, "NUMFLIPS : ", numflips
 
 !-----------------------------------------------------------------------
 END SUBROUTINE edgeFlipper 
@@ -422,13 +462,13 @@ END SUBROUTINE ApplyForces
 !>        You can comment out the default Bossens-Heckbert potential function
 !>        for the spring-based force function. 
 !-----------------------------------------------------------------------
-SUBROUTINE CalcForces(MeshSizes,POINTS,NP,BARS,NUMBARS,FVEC) 
+SUBROUTINE CalcForces(MeshSizes,POINTS,BARS,NUMBARS,FVEC) 
 !-----------------------------------------------------------------------
 implicit none 
 
 ! INPUTS
 TYPE(MetricTensor),INTENT(IN) :: MeshSizes
-INTEGER(idx_t),INTENT(IN) :: NP,NUMBARS
+INTEGER(idx_t),INTENT(IN) :: NUMBARS
 INTEGER(idx_t),INTENT(IN),ALLOCATABLE :: BARS(:,:)
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 
@@ -437,54 +477,31 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
 INTEGER(idx_t) :: i 
-REAL(real_t)   :: barvec(NUMBARS,2)
-REAL(real_t)   :: L(1:NUMBARS,1:1),L0(1:NUMBARS,1:1),LN(1:NUMBARS,1:1)
+REAL(real_t)   :: BARVEC(NUMBARS,2)
+REAL(real_t)   :: LN(1:NUMBARS,1:1)
 REAL(real_t)   :: FORCES(1:NUMBARS)
 REAL(real_t)   :: HBARS(1:NUMBARS,1:1)
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
-REAL(real_t)   :: midpt(1:2,1:1),a,b,SCALE_FACTOR
+REAL(real_t)   :: midpt(1:2,1:1)
 REAL(real_t)   :: ME(1:2,1:2)
 INTEGER(idx_t) :: DIM=2 
 
-DIM = 2
 ALLOCATE(FVEC(NUMBARS,2))
 ! L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
-  ! To calculate ideal edgelength, assume edge extrues along ideal length 
+  ! compute the length in metric space (should be close to 1 if ideal)
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint
-  HBARS(I,1)=CalcMeshSize(MIDPT(1:2,1),MeshSizes) ! query the ideal isotropic element size
-
-  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) ! a is in radians
-  A = COS(A) 
-  VEC1_t(1,1) = MIDPT(1,1) - (MIDPT(1,1)-A*HBARS(I,1)) ! cos(a)
-
-  A = CalcMeshAngle(MIDPT(1:2,1),MeshSizes) ! a is in radians
-  A = SIN(A) 
-  ! no elongation in y-direction hence b=1.0d0
-  VEC1_t(1,2) = MIDPT(2,1) - (MIDPT(2,1)-A*HBARS(I,1)) ! sin(a)
-
-  ! compute ideal length 
-  VEC1 = transpose(VEC1_t) 
-  temp2(1:1,1:1)=MATMUL(VEC1_t(1:1,1:2),VEC1(1:2,1:1))
-  HBARS(I:I,1:1)=SQRT(temp2) 
-
-  ! compute the actual length in metric space 
+  ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint (approx.)
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
   VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
   VEC1=TRANSPOSE(VEC1_t) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
-  L(I:I,1:1)=SQRT(temp2) 
+  LN(I:I,1:1)=SQRT(temp2)
 ENDDO 
 
-a=MEDIAN(L,1,NUMBARS) ; b = MEDIAN(HBARS,1,NUMBARS)
-SCALE_FACTOR = a/b 
-
 DO I = 1,NUMBARS
-  L0(I,1)=HBARS(I,1)*FSCALE*SCALE_FACTOR
-  LN(I,1)=L(I,1)/L0(I,1)
   ! Bossens Heckbert 
   FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
@@ -857,7 +874,7 @@ ELSE
   STOP  
 ENDIF
 
-CALL densify(SzFx%LMIN/2.0d0,PSLG) 
+CALL densify(LMIN/2.0d0,PSLG) 
 
 !-----------------------------------------------------------------------
 END FUNCTION ReadPSLGtxt 
@@ -880,6 +897,7 @@ REAL(real_t),INTENT(OUT),ALLOCATABLE :: IPTS(:,:)
 INTEGER(idx_t),INTENT(OUT) :: NP 
 
 ! local to subroutine 
+REAL(real_t)   :: H1,H2
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
 REAL(real_t)   :: ME(1:2,1:2)
 REAL(real_t)   :: LMIN
@@ -895,7 +913,7 @@ INTEGER(idx_t)           :: nx,ny,nz
 INTEGER(idx_t)           :: i,j,k
 INTEGER(idx_t)           :: DIM
 
-LMIN = SzFields%Iso%LMIN
+LMIN = MINVAL((/SzFields%ELONG1%LMIN,SzFields%ELONG2%LMIN/))
 DIM  = PSLG%DIM
 
 ! 1. Create initial distribution in bounding box (equilateral triangles)
@@ -986,26 +1004,10 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ALLOCATE(r0(1:NP,1:1)) 
 
 DO I = 1,NP
-
-  H=CalcMeshSize(IPTS(I,:),SzFields)
-
-  ME=CalcMetricTensor(IPTS(I,:),SzFields)
-  
-  ! assume ideal edge extrudes at ideal angle 
-  A = CalcMeshAngle(IPTS(I,:),SzFields) 
-  A = COS(A) ! in radians 
-  VEC1_t(1,1) = IPTS(1,1) - (IPTS(1,1)-A*H(1,1)) ! cos(a)
-
-  A = CalcMeshAngle(IPTS(I,:),SzFields) 
-  A = SIN(A) ! in radians 
-  VEC1_t(1,2) = IPTS(1,2) - (IPTS(1,2)-A*H(1,1)) ! sin(a)
-
-  VEC1 = transpose(VEC1_t) 
-  temp2(1:1,1:1)=MATMUL(VEC1_t(1:1,1:2),VEC1)
-  H=SQRT(temp2) 
-
+  H1=CalcMeshElong1(IPTS(I,:),SzFields) ! size in x-dir
+  H2=CalcMeshElong2(IPTS(I,:),SzFields) ! size in y-dir
+  H(1,1) = SQRT(H1**2.0d0 + H2**2.0d0) 
   r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
-
 ENDDO
 
 a = maxval(r0) 
@@ -1119,6 +1121,7 @@ END SUBROUTINE DelTriaWElim
 !> @brief Given an array of triangular facets, organize them in a 
 !>        CCW order by calculating the cross-product and reversing 
 !>        the vertex order in the facet if necessary.
+!>        Call the orient2d test in 
 !-----------------------------------------------------------------------
 SUBROUTINE WindingOrder2D(FACETS,NF,POINTS) 
 !-----------------------------------------------------------------------
@@ -1127,19 +1130,23 @@ INTEGER(idx_t),INTENT(INOUT),ALLOCATABLE :: FACETS(:,:)
 INTEGER(idx_t),INTENT(IN) :: NF
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 
-REAL(real_t) :: AtoB(2),BtoC(2)
 REAL(real_t) :: crossz 
+REAL(real_t):: a(2),b(2),c(2)
+
 integer(idx_t):: i
 integer(idx_t):: nm1,nm2,nm3
 integer(idx_t):: temp
+
 
 do i = 1,nf
   nm1=facets(i,1) ! a
   nm2=facets(i,2) ! b
   nm3=facets(i,3) ! c
-  AtoB = points(nm2,:) - points(nm1,:) ! b - a
-  BtoC = points(nm3,:) - points(nm2,:) ! c - b
-  crossz = AtoB(1)*BtoC(2) - AtoB(2)*BtoC(1) 
+  a=points(nm1,:)
+  b=points(nm2,:)
+  c=points(nm3,:)
+  ! call shewchuk predicate 
+  crossz = forient2d(a,b,c)
   ! then cw,reverse   
   if(crossz.lt.0.d0) then
     temp=facets(i,1)  

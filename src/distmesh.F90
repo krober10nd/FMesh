@@ -54,7 +54,7 @@ DO
   CALL FindUniqueBars(NF,TRIAS,NUMBARS,BARS)
 
   ! Calculate forces on bars
-  CALL CalcForces(SzFields,POINTS,NP,BARS,NUMBARS,FVEC)
+  CALL CalcForces(SzFields,POINTS,BARS,NUMBARS,FVEC)
 
   ! Move points based on forces
   CALL ApplyForces(POINTS,NP,BARS,NUMBARS,FVEC) 

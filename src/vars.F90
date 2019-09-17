@@ -17,7 +17,8 @@ REAL(real_t) :: TS,TF ! < variables for timing all iterations of distmesh
 
 CHARACTER(100) :: pslgfname !< filename of PSLG data
 CHARACTER(100) :: sizefname !< filename of mesh sizes data.
-CHARACTER(100) :: elongfname !< filename of elongation data.
+CHARACTER(100) :: elongfname1 !< filename of elongation data.
+CHARACTER(100) :: elongfname2 !< filename of elongation data.
 CHARACTER(100) :: anglefname !< filename of angle data.
 
 ! Later on this should become a derived type 
@@ -73,13 +74,16 @@ END TYPE
 TYPE MetricTensor !< container for all the raster fields
    TYPE(GridData) :: Iso !< isotropic sizes 
    TYPE(GridData) :: Angle !< angle of elongation 
-   TYPE(GridData) :: Elong !< factor of elongation 
+   TYPE(GridData) :: Elong1 !< factor of elongation along principal
+   TYPE(GridData) :: Elong2 !< factor of elongation along transverse
 END TYPE 
 !-----------------------------------------------------------------------
 
 TYPE(GridData) :: SzFx !< for the size of elements in the domain 
 
-TYPE(GridData) :: ElongFx !< for the elongation of elements in the domain 
+TYPE(GridData) :: ElongFx1 !< for the elongation of elements in the domain 
+
+TYPE(GridData) :: ElongFx2 !< for the elongation of elements in the domain 
 
 TYPE(GridData) :: AngleFx !< for the orientation of elements in the domain 
 
