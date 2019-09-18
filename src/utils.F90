@@ -236,18 +236,18 @@ DO T1 = 1,NF
 
       ! eval metric tensor at all points of quad
       ME=0.0d0
-      DO ie =1,2
-        DO iv =1,3
+      DO ie =1,1
+        DO iv =1,1
           tME(1:2,1:2)=CalcMetricTensor(POINTS(NEWT(ie,iv),:),SzGrid) 
           ME(1:2,1:2)=tME(1:2,1:2) + ME(1:2,1:2)
         ENDDO
       ENDDO
-      ! compute average metric tensor 
-      DO ie=1,2
-        DO iee=1,2
-          ME(ie,iee)=ME(ie,iee)/6.0d0
-        ENDDO
-      ENDDO
+      !! compute average metric tensor 
+      !DO ie=1,2
+      !  DO iee=1,2
+      !    ME(ie,iee)=ME(ie,iee)/6.0d0
+      !  ENDDO
+      !ENDDO
 
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
@@ -476,11 +476,13 @@ REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 REAL(real_t),INTENT(OUT),ALLOCATABLE :: FVEC(:,:)
 
 ! LOCAL 
-INTEGER(idx_t) :: i 
+INTEGER(idx_t) :: i
+REAL(real_t)   :: a,b,scale_factor ! related to inflation of bars for fast convergence.
 REAL(real_t)   :: BARVEC(NUMBARS,2)
-REAL(real_t)   :: LN(1:NUMBARS,1:1)
+REAL(real_t)   :: LN(1:NUMBARS,1:1) ! normalized length (actual length/ideal length) 
+REAL(real_t)   :: L(1:NUMBARS,1:1)  ! actual length (considering metric tensor)
+REAL(real_t)   :: L0(1:NUMBARS,1:1) ! ideal length 
 REAL(real_t)   :: FORCES(1:NUMBARS)
-REAL(real_t)   :: HBARS(1:NUMBARS,1:1)
 REAL(real_t)   :: temp1(1:1,1:2),temp2(1:1,1:1),VEC1(1:2,1:1),VEC1_t(1:1,1:2)
 REAL(real_t)   :: midpt(1:2,1:1)
 REAL(real_t)   :: ME(1:2,1:2)
@@ -490,7 +492,7 @@ ALLOCATE(FVEC(NUMBARS,2))
 ! L(jj,1) = sqrt(rij'*M*rij);
 FORCES=0.0d0
 DO I = 1,NUMBARS
-  ! compute the length in metric space (should be close to 1 if ideal)
+  ! compute the length in metric space (should be 1 if ideal)
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
   ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint (approx.)
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
@@ -498,14 +500,20 @@ DO I = 1,NUMBARS
   VEC1=TRANSPOSE(VEC1_t) 
   temp1(1:1,1:2)=MATMUL(VEC1_t(1:1,1:2),ME(1:2,1:2))
   temp2(1:1,1:1)=MATMUL(temp1(1:1,1:2),VEC1(1:2,1:1))
-  LN(I:I,1:1)=SQRT(temp2)
+  L(I:I,1:1)=SQRT(temp2)
 ENDDO 
 
+a=MEDIAN(L,1,NUMBARS)
+b=1.0d0 ! this was MEDIAN(HBARS,1,NUMBARS) but in anis ideal edge length is 1
+SCALE_FACTOR = a/b 
+
 DO I = 1,NUMBARS
-  ! Bossens Heckbert 
-  !FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
+  L0(I,1) = 1.0d0*1.20d0*SCALE_FACTOR !  Ideal lengths L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
+  LN(I,1) = L(I,1)/L0(I,1)            !  Normalized length, 1 is ideal 
+  ! Bossens Heckbert (attraction+replusion)  
+  FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
-  FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
+  !FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
@@ -1002,7 +1010,6 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ! Apply rejection method 
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
-
 DO I = 1,NP
   H(1,1) = CalcIdealAreas(SzFields,IPTS(I,:))
   r0(i,1)  = 1.0d0/(H(1,1)) ! r0 = 1/area 
@@ -1775,8 +1782,8 @@ REAL(real_t)   :: ME(2,2)
 REAL(real_t)   :: dME
 
 ME=CalcMetricTensor(POINT,SzGrid)
-area=deter2x2(ME) 
-print *, ME(1,1),ME(1,2),ME(2,1),ME(2,2),area
+area=SQRT(deter2x2(ME))
+!print *, ME(1,1),ME(1,2),ME(2,1),ME(2,2),area
 
 !-----------------------------------------------------------------------
 END FUNCTION CalcIdealAreas

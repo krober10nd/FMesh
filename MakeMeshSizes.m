@@ -1,7 +1,7 @@
 clearvars; close all; clc; 
 
 %%
-dx =0.01; 
+dx =0.05; 
 [xg,yg]=meshgrid(-1.0:dx:1.0,-1.0:dx:1.0);
 x0y0(1) = min(xg(:)); 
 x0y0(2) = min(yg(:)); 
@@ -24,7 +24,7 @@ for i = 1 : length(PSLG)
 end
 
 %% MESH SIZE IN X-DIRECTION 
-szx = dx + 0.15*(1-yg); 
+szx = dx + 0.05*(1-yg); 
 szx(szx < dx) = dx ; 
 szx(szx > 5*dx) = 5*dx; 
 
