@@ -97,10 +97,10 @@ PUBLIC edgeFlipper,ProjectPointsBack,ReadPSLGtxt,FormInitialPoints2D
 PUBLIC DelTriaWElim,TriaToTria,findUniqueBars,CalcForces,ApplyForces
 PUBLIC WriteMesh
 
-
 PRIVATE sortRows,quickSortINTLONG,densify,MeshGrid2D,PushZerosToBackREAL
 PRIVATE PushZerosToBackINT,FPNPOLY,CalcSignedDistance,CalcBaryCenter
 PRIVATE linspace,meshexp,quicksortINT,quickSortREAL,median
+PRIVATE CalcIdealAreas,deter2x2
 
 !---------------------end of data declarations--------------------------------
 
@@ -1004,12 +1004,9 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ALLOCATE(r0(1:NP,1:1)) 
 
 DO I = 1,NP
-  H1=CalcMeshElong1(IPTS(I,:),SzFields) ! size in x-dir
-  H2=CalcMeshElong2(IPTS(I,:),SzFields) ! size in y-dir
-  H(1,1) = SQRT(H1**2.0d0 + H2**2.0d0) 
-  r0(i,1)  = 1.0d0/(H(1,1)**2.0d0)
+  H(1,1) = CalcIdealAreas(SzFields,IPTS(I,:))
+  r0(i,1)  = 1.0d0/H(1,1) ! r0 = 1/area 
 ENDDO
-
 a = maxval(r0) 
 DO I = 1,NP 
   b = r0(i,1)/a
@@ -1034,6 +1031,8 @@ WRITE(*,'(A)') "                                      "
 !-----------------------------------------------------------------------
 END SUBROUTINE FormInitialPoints2D
 !-----------------------------------------------------------------------
+
+
 
 
 !-----------------------------------------------------------------------
@@ -1758,6 +1757,43 @@ deallocate(at)
 
 !-----------------------------------------------------------------------
 end function median
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!>@brief Given a point, return the ideal area for an element considering
+!>       the metric tensor
+!-----------------------------------------------------------------------
+FUNCTION CalcIdealAreas(SzGrid,POINT) RESULT(AREA)
+!-----------------------------------------------------------------------
+IMPLICIT NONE 
+
+REAL(real_t) :: AREA
+TYPE(MetricTensor),INTENT(IN) :: SzGrid
+REAL(real_t),INTENT(IN) :: POINT(2)
+REAL(real_t)   :: ME(2,2)
+REAL(real_t)   :: dME
+
+ME=CalcMetricTensor(POINT,SzGrid)
+dME=deter2x2(ME) 
+area=SQRT(dME)
+
+!-----------------------------------------------------------------------
+END FUNCTION CalcIdealAreas
+!-----------------------------------------------------------------------
+
+
+!-----------------------------------------------------------------------
+!> @brief determinant of a 2x2 matrix..m=.[a b] [c d] is det=ad-bc
+!-----------------------------------------------------------------------
+FUNCTION deter2x2(m) result(det)
+!-----------------------------------------------------------------------
+IMPLICIT NONE 
+real(real_t) :: det
+real(real_t),intent(in) :: m(2,2)
+det=m(1,1)*m(2,2)-m(1,2)*m(2,1)
+!-----------------------------------------------------------------------
+END FUNCTION deter2x2
 !-----------------------------------------------------------------------
 
 

@@ -18,6 +18,10 @@ CALL FormInitialPoints2D(SzFields,PSLG,POINTS,NP)            ! Create initial po
 
 CALL DelTriaWElim(PSLG,NP,POINTS,NF,TRIAS)                   ! Compute Delaunay triangulation of point set with masking
 
+ITER=1
+CALL WriteMesh(POINTS,NP,TRIAS,NF,ITER)
+stop 
+
 CALL TriaToTria(NF,TRIAS,T2T,T2N)                            ! Calculate the triangle adj. matrices
 
 WRITE(*,'(A)') "                                      "
@@ -86,7 +90,6 @@ WRITE(*,'(A,I8,A,I8,A)')"INFO: " &
 //" FINAL MESH HAS ",NP," VERTICES " &
 //" AND ",NF," FACES "
 
-CALL WriteMesh(POINTS,NP,TRIAS,NF,ITER)
 
 !-----------------------------------------------------------------------
 END PROGRAM DISTMESH
