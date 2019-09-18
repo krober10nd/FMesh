@@ -503,9 +503,9 @@ ENDDO
 
 DO I = 1,NUMBARS
   ! Bossens Heckbert 
-  FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
+  !FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
-  !FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
+  FORCES(I)=MAXVAL( (/1.0d0-LN(I,1),0.0d0/))
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
@@ -1005,7 +1005,7 @@ ALLOCATE(r0(1:NP,1:1))
 
 DO I = 1,NP
   H(1,1) = CalcIdealAreas(SzFields,IPTS(I,:))
-  r0(i,1)  = 1.0d0/H(1,1) ! r0 = 1/area 
+  r0(i,1)  = 1.0d0/(H(1,1)) ! r0 = 1/area 
 ENDDO
 a = maxval(r0) 
 DO I = 1,NP 
@@ -1775,8 +1775,8 @@ REAL(real_t)   :: ME(2,2)
 REAL(real_t)   :: dME
 
 ME=CalcMetricTensor(POINT,SzGrid)
-dME=deter2x2(ME) 
-area=SQRT(dME)
+area=deter2x2(ME) 
+print *, ME(1,1),ME(1,2),ME(2,1),ME(2,2),area
 
 !-----------------------------------------------------------------------
 END FUNCTION CalcIdealAreas

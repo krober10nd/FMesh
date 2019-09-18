@@ -15,7 +15,7 @@ REAL(kind=real_t)   :: LMIN !< minimum mesh size (set when reading mesh size fun
 
 
 PUBLIC LoadMeshSizes,LoadMeshElong1,LoadMeshElong2,LoadMeshAngle
-PUBLIC CalcMeshSize,CalcMeshElong1,CalcMeshElong2,CalcMeshAngle
+PUBLIC CalcMeshElong1,CalcMeshElong2,CalcMeshAngle
 PUBLIC CalcMetricTensor
 
 
@@ -264,22 +264,6 @@ CLOSE(1)
 
 !-----------------------------------------------------------------------
 END FUNCTION LoadMeshAngle
-!-----------------------------------------------------------------------
-
-
-!-----------------------------------------------------------------------
-!> @brief Calls the bilinear interpolant to determine mesh sizes
-!-----------------------------------------------------------------------
-FUNCTION CalcMeshSize(POINTS,SzFx) Result(MeshSize)
-!-----------------------------------------------------------------------
-real(real_t):: MeshSize
-type(MetricTensor),intent(in):: SzFx
-real(real_t),intent(in) :: points(2)
-
-MeshSize = LinearInterp2D(points,SzFx%Iso)
-
-!-----------------------------------------------------------------------
-END FUNCTION CalcMeshSize
 !-----------------------------------------------------------------------
 
 

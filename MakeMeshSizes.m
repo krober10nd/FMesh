@@ -24,9 +24,9 @@ for i = 1 : length(PSLG)
 end
 
 %% MESH SIZE IN X-DIRECTION 
-szx = abs(dx - 0.30*xg); 
+szx = dx + 0.15*(1-yg); 
 szx(szx < dx) = dx ; 
-szx(szx > 3*dx) = 5*dx; 
+szx(szx > 5*dx) = 5*dx; 
 
 figure;
 pcolor(xg,yg,szx); 
@@ -38,17 +38,13 @@ fid = fopen('MeshSizeXdir.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ; 
 for i = 1 : nrows
     for j = 1 : ncols
-       fprintf(fid,'%f ', szx(j,i)) ; 
+       fprintf(fid,'%f ', szx(i,j)) ; 
     end
     fprintf(fid,'\n') ; 
 end
 fclose(fid) ;
 
 %% MESH SIZE IN Y-DIR
-szy = zeros(nrows,ncols) + dx ; % constant size for now. 
-szy = abs(dx + 0.30*yg); 
-% szy(szy < dx) = dx ; 
-% szy(szy > 3*dx) = 5*dx; 
 szy = szx ;
 
 
@@ -60,9 +56,9 @@ colorbar
 
 fid = fopen('MeshSizeYdir.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ;
-for i = 1 : ncols
-    for j = 1 : nrows
-        fprintf(fid,'%f ',szy(j,i));
+for i = 1 : nrows
+    for j = 1 : ncols
+        fprintf(fid,'%f ',szy(i,j));
     end
     fprintf(fid,'\n') ;
 end
