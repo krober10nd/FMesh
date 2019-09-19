@@ -30,7 +30,7 @@ CPPFLAGS = -I/usr/local/include/libqhull_r
 # compiler
 FC = gfortran
 # compiler flags
-FFLAGS = -Og  #-fbacktrace -fbounds-check -Wall -Wextra -pedantic
+FFLAGS = -O3  #-fbacktrace -fbounds-check -Wall -Wextra -pedantic
 # flag to specify directory to put compiled .mod files (e.g. -module for ifort, -J for gfortran)
 F90_MOD_FLAG = -J
 
@@ -38,7 +38,7 @@ F90_MOD_FLAG = -J
 # compiler
 CC = gcc
 # compiler flags
-CFLAGS = -Og  #-Wall -Wextra -pedantic
+CFLAGS = -O3  #-Wall -Wextra -pedantic
 # Not all compilers (e.g. xlc) support -MM -MT that we require to produce the
 # C dependencies.  Fortunately there is (usually) a version of (e.g.) gcc
 # kicking around which does.  If CCD is defined, then use that to generate the
@@ -49,7 +49,7 @@ CCD =
 # compiler
 CXX = g++
 # compiler flags
-CXXFLAGS = -Og
+CXXFLAGS = -O3
 # Not all compilers (e.g. xlc++) support -MM -MT that we require to produce the
 # C++ dependencies.  Fortunately there is (usually) a version of (e.g.) g++
 # kicking around which does.  If CXXD is defined, then use that to generate the

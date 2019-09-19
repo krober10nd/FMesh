@@ -242,12 +242,12 @@ DO T1 = 1,NF
           ME(1:2,1:2)=tME(1:2,1:2) + ME(1:2,1:2)
         ENDDO
       ENDDO
-      !! compute average metric tensor 
-      !DO ie=1,2
-      !  DO iee=1,2
-      !    ME(ie,iee)=ME(ie,iee)/6.0d0
-      !  ENDDO
-      !ENDDO
+      ! compute average metric tensor 
+      DO ie=1,2
+        DO iee=1,2
+          ME(ie,iee)=ME(ie,iee)/6.0d0
+        ENDDO
+      ENDDO
 
       ! vectors of shape 2x1 after transpose from 1x2 shape 
       temp1 = POINTS(newt(1,tix13):newt(1,tix13),1:2) - POINTS(newt(1,tix11):newt(1,tix11),1:2)
@@ -1789,7 +1789,7 @@ REAL(real_t)   :: ME(2,2)
 REAL(real_t)   :: dME
 
 ME=CalcMetricTensor(POINT,SzGrid)
-area=SQRT(deter2x2(ME))
+area=0.5d0*SQRT(deter2x2(ME))
 !print *, ME(1,1),ME(1,2),ME(2,1),ME(2,2),area
 
 !-----------------------------------------------------------------------
