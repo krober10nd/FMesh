@@ -341,10 +341,10 @@ B = SIN(MeshAngle)
 
 ! |A -B|
 ! |B  A|
-rot(1,1) = 1.00d0 ! A
-rot(2,2) = 1.0d0  !A
-rot(1,2) = 0.0d0  !-B
-rot(2,1) = 0.0d0  !B
+rot(1,1) = A
+rot(2,2) = A
+rot(1,2) =-B
+rot(2,1) = B
  
 rot_trans  = TRANSPOSE(Rot) 
 
@@ -354,20 +354,6 @@ elong(2,2) = 1.0d0/(MeshElong2**2.0d0)
 
 temp1 = MatMul(rot_trans,elong)
 ME    = MatMul(temp1,rot) 
-
-print *, rot_trans(1,1),rot_trans(1,2)
-print *, rot_trans(2,1),rot_trans(2,2)
-
-print *, elong(1,1),elong(1,2)
-print *, elong(2,1),elong(2,2)
-
-print *, temp1(1,1),temp1(1,2)
-print *, temp1(2,1),temp1(2,2)
-
-print *, ME(1,1),ME(1,2)
-print *, ME(2,1),ME(2,2)
-
-stop
 
 !-----------------------------------------------------------------------
 END FUNCTION CalcMetricTensor 

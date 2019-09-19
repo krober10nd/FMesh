@@ -2,7 +2,7 @@ clearvars; close all; clc;
 
 %%
 dx =0.05; 
-[xg,yg]=meshgrid(-1.0:dx:1.0,-1.0:dx:1.0);
+[xg,yg]=meshgrid(1.0:dx:5.0,1.0:dx:5.0);
 x0y0(1) = min(xg(:)); 
 x0y0(2) = min(yg(:)); 
 
@@ -15,7 +15,7 @@ PSLG = [min(xg(:)),max(yg(:))
         min(xg(:)),min(yg(:))
         min(xg(:)),max(yg(:))]; 
     
-hold on; plot(PSLG(:,1),PSLG(:,2),'k-','linewi',2) ;
+%hold on; plot(PSLG(:,1),PSLG(:,2),'k-','linewi',2) ;
 
 fid = fopen('PSLG.txt','w') ;
 fprintf(fid,'%d %d\n',length(PSLG),2) ; 
@@ -24,7 +24,7 @@ for i = 1 : length(PSLG)
 end
 
 %% MESH SIZE IN X-DIRECTION 
-szx = dx + 0.05*(1-yg); 
+szx = dx + 0.05*(5-yg); 
 szx(szx < dx) = dx ; 
 szx(szx > 5*dx) = 5*dx; 
 
@@ -45,8 +45,9 @@ end
 fclose(fid) ;
 
 %% MESH SIZE IN Y-DIR
-szy = szx ;
-
+szy = dx + 0.35*(5-xg); 
+szy(szy < dx) = dx ; 
+szy(szy > 5*dx) = 5*dx; 
 
 figure;
 pcolor(xg,yg,szy); 
@@ -78,8 +79,8 @@ for i = 1 : ncols
 end
 fclose(fid) ;
 
-figure;
-pcolor(xg,yg,angles); 
-shading interp
-title('Mesh angles') ; 
-colorbar
+% figure;
+% pcolor(xg,yg,angles); 
+% shading interp
+% title('Mesh angles') ; 
+% colorbar

@@ -236,8 +236,8 @@ DO T1 = 1,NF
 
       ! eval metric tensor at all points of quad
       ME=0.0d0
-      DO ie =1,1
-        DO iv =1,1
+      DO ie =1,2
+        DO iv =1,3
           tME(1:2,1:2)=CalcMetricTensor(POINTS(NEWT(ie,iv),:),SzGrid) 
           ME(1:2,1:2)=tME(1:2,1:2) + ME(1:2,1:2)
         ENDDO
@@ -494,7 +494,7 @@ FORCES=0.0d0
 DO I = 1,NUMBARS
   ! compute the length in metric space (should be 1 if ideal)
   MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
-  ME = CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint (approx.)
+  ME= CalcMetricTensor(MIDPT(1:2,1),MeshSizes) ! query metric tensor at midpoint (approx.)
   BARVEC(I,:)=POINTS(BARS(I,1),:) - POINTS(BARS(I,2),:)
   VEC1_t(1:1,1:2)=BARVEC(I:I,1:2)
   VEC1=TRANSPOSE(VEC1_t) 
@@ -503,13 +503,9 @@ DO I = 1,NUMBARS
   L(I:I,1:1)=SQRT(temp2)
 ENDDO 
 
-a=MEDIAN(L,1,NUMBARS)
-b=1.0d0 ! this was MEDIAN(HBARS,1,NUMBARS) but in anis ideal edge length is 1
-SCALE_FACTOR = a/b 
-
+A=MEDIAN(L,1,NUMBARS)
 DO I = 1,NUMBARS
-  L0(I,1) = 1.0d0*1.20d0*SCALE_FACTOR !  Ideal lengths L0(I)=HBARS(I)*FSCALE*SCALE_FACTOR
-  LN(I,1) = L(I,1)/L0(I,1)            !  Normalized length, 1 is ideal 
+  LN(I,1) = L(I,1)/(FSCALE*A)      !  Normalized length, 1 is ideal 
   ! Bossens Heckbert (attraction+replusion)  
   FORCES(I)=(1-LN(I,1)**4)*EXP(-LN(I,1)**4)/LN(I,1)
   ! Linear spring (Hooke's Law)
@@ -517,6 +513,13 @@ DO I = 1,NUMBARS
   FVEC(I,1)=FORCES(I)*BARVEC(I,1)
   FVEC(I,2)=FORCES(I)*BARVEC(I,2)
 ENDDO
+
+!OPEN(UNIT=300,FILE="LookAtForces.txt",ACTION='WRITE')
+!DO i=1,NumBars
+!  MIDPT(1:2,1)=(POINTS(BARS(I,1),:) + POINTS(BARS(I,2),:))/2.0d0
+!  WRITE(300,"(3F12.8)")MIDPT(1,1),MIDPT(2,1),FORCES(I)*0.10d0
+!ENDDO
+!CLOSE(300)
 
 
 !-----------------------------------------------------------------------
@@ -1011,8 +1014,8 @@ CALL PushZerosToBackREAL(IPTS,NP)
 ! p=p(rand(size(p,1),1)<r0./max(r0),:);  
 ALLOCATE(r0(1:NP,1:1)) 
 DO I = 1,NP
-  H(1,1) = CalcIdealAreas(SzFields,IPTS(I,:))
-  r0(i,1)  = 1.0d0/(H(1,1)) ! r0 = 1/area 
+  H(1,1)=CalcIdealAreas(SzFields,IPTS(I,:))
+  r0(i,1)=H(1,1)! (H(1,1)) ! r0 = 1/area 
 ENDDO
 a = maxval(r0) 
 DO I = 1,NP 
@@ -1137,7 +1140,8 @@ INTEGER(idx_t),INTENT(IN) :: NF
 REAL(real_t),INTENT(IN),ALLOCATABLE :: POINTS(:,:)
 
 REAL(real_t) :: crossz 
-REAL(real_t):: a(2),b(2),c(2)
+!REAL(real_t):: a(2),b(2),c(2)
+REAL(real_t) :: AtoB(2),BtoC(2)
 
 integer(idx_t):: i
 integer(idx_t):: nm1,nm2,nm3
@@ -1148,11 +1152,14 @@ do i = 1,nf
   nm1=facets(i,1) ! a
   nm2=facets(i,2) ! b
   nm3=facets(i,3) ! c
-  a=points(nm1,:)
-  b=points(nm2,:)
-  c=points(nm3,:)
+  !a=points(nm1,:)
+  !b=points(nm2,:)
+  !c=points(nm3,:)
+  AtoB = points(nm2,:) - points(nm1,:) ! b - a
+  BtoC = points(nm3,:) - points(nm2,:) ! c - b
+  crossz = AtoB(1)*BtoC(2) - AtoB(2)*BtoC(1)
   ! call shewchuk predicate 
-  crossz = forient2d(a,b,c)
+  !crossz = forient2d(a,b,c)
   ! then cw,reverse   
   if(crossz.lt.0.d0) then
     temp=facets(i,1)  

@@ -2,10 +2,10 @@ close all; clc;
 
 t = []; p = []; 
 
-nscreen=5; maxiter=100 ; 
+nscreen=5; maxiter=2000 ; 
 
 figure; 
-for i = 1:1:maxiter
+for i = 5:5:maxiter
     n_strPadded = sprintf( '%04d', i) ; 
     Pfname = ['POINTS',n_strPadded,'.TXT'] ;
     Tfname = ['FACETS',n_strPadded,'.TXT'] ;
@@ -15,8 +15,8 @@ for i = 1:1:maxiter
     length(p)
     
     cla, triplot(t,p(:,1),p(:,2));
-    axis([-1 1 -1 1])
+    axis([1 5 1 5])
     %axis([   -0.4888   -0.0931    0.3473    0.7430])
     title(['ITERATION=',num2str(i)]) ;
-    pause
+    pause(0.01)
 end
