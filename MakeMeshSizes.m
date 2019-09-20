@@ -2,7 +2,7 @@ clearvars; close all; clc;
 
 %%
 dx =0.05; 
-[xg,yg]=meshgrid(-1.0:dx:1.0,-1.0:dx:1.0);
+[xg,yg]=meshgrid(-2.0:dx:2.0,-2.0:dx:2.0);
 x0y0(1) = min(xg(:)); 
 x0y0(2) = min(yg(:)); 
 
@@ -24,17 +24,25 @@ for i = 1 : length(PSLG)
 end
 
 %% MESH SIZE IN X-DIRECTION 
-szy = zeros(nrows,ncols)+dx ; 
+szx = 0.0005 + 1.5*abs(1-(xg.^2  + yg.^2 ).^0.5);  
+szy = 0.1*(xg.^2 + yg.^2).^0.5 + 1.5*abs(1-(xg.^2  + yg.^2 ).^0.5);  
+% szy = zeros(nrows,ncols)+dx ; 
+% elong =10; 
+% grade =3; 
+% 
+% x=-1:dx:1; 
+% %x=y.^2 ;
+% y=linspace(-1.0,1.0,length(x)); 
+% line = [x',y'];
+% testset = [xg(:),yg(:)];
+% [~, dist] = ourKNNsearch(line',testset',1) ;
+% dist = reshape(dist,nrows,ncols); 
+% 
+% szx = elong*dx - dist*grade ;
+% szx(szx < dx) = dx ; 
 
-y=-1:dx:1; 
-x=y.^2 ;
-line = [x',y'];
-testset = [xg(:),yg(:)];
-[~, dist] = ourKNNsearch(line',testset',1) ;
-dist = reshape(dist,nrows,ncols); 
-
-szx = 5*dx - dist*0.35 ;
-
+%szy = dx + dist*grade; 
+%szy(szy > elong*dx) = elong*dx; 
 
 figure;
 pcolor(xg,yg,szx);
@@ -50,9 +58,9 @@ colorbar
 
 fid = fopen('MeshSizeXdir.txt','w') ; 
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ; 
-for i = 1 : nrows
-    for j = 1 : ncols
-       fprintf(fid,'%f ', szx(i,j)) ; 
+for i = 1 : ncols
+    for j = 1 : nrows
+       fprintf(fid,'%f ', szx(j,i)) ; 
     end
     fprintf(fid,'\n') ; 
 end
@@ -61,9 +69,9 @@ fclose(fid) ;
 %% MESH SIZE IN Y-DIR
 fid = fopen('MeshSizeYdir.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ;
-for i = 1 : nrows
-    for j = 1 : ncols
-        fprintf(fid,'%f ',szy(i,j));
+for i = 1 : ncols
+    for j = 1 : nrows
+        fprintf(fid,'%f ',szy(j,i));
     end
     fprintf(fid,'\n') ;
 end
@@ -74,15 +82,15 @@ fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ;
 
 angles = zeros(nrows,ncols) ;
 
-for i = 1 : nrows
-    for j = 1 : ncols
-        angles(i,j)  = atand(yg(i,j)/-xg(i,j)) ;
+for i = 1 : ncols
+    for j = 1 : nrows
+        angles(j,i)  = atand(xg(j,i)/yg(j,i)) + 90  ;
     end
 end
 angles(isnan(angles))=0.0; 
-for i = 1 : nrows
-    for j = 1 :  ncols
-        fprintf(fid,'%f ', 0*angles(i,j)*(pi/180.0)); %(angles(j,i))*(pi/180)); % sz(i,j)) ;
+for i = 1 : ncols
+    for j = 1 :  nrows
+        fprintf(fid,'%f ',angles(j,i)*(pi/180.0));
     end
     fprintf(fid,'\n') ;
 end
