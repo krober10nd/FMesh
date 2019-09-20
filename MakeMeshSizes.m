@@ -2,7 +2,7 @@ clearvars; close all; clc;
 
 %%
 dx =0.05; 
-[xg,yg]=meshgrid(1.0:dx:5.0,1.0:dx:5.0);
+[xg,yg]=meshgrid(-1.0:dx:1.0,-1.0:dx:1.0);
 x0y0(1) = min(xg(:)); 
 x0y0(2) = min(yg(:)); 
 
@@ -24,14 +24,28 @@ for i = 1 : length(PSLG)
 end
 
 %% MESH SIZE IN X-DIRECTION 
-szx = dx + 0.05*(5-yg); 
-szx(szx < dx) = dx ; 
-szx(szx > 5*dx) = 5*dx; 
+szy = zeros(nrows,ncols)+dx ; 
+
+y=-1:dx:1; 
+x=y.^2 ;
+line = [x',y'];
+testset = [xg(:),yg(:)];
+[~, dist] = ourKNNsearch(line',testset',1) ;
+dist = reshape(dist,nrows,ncols); 
+
+szx = 5*dx - dist*0.35 ;
+
 
 figure;
-pcolor(xg,yg,szx); 
+pcolor(xg,yg,szx);
 shading interp
 title('Mesh size in x-dir') ; 
+colorbar
+
+figure;
+pcolor(xg,yg,szy); 
+shading interp
+title('Mesh size in y-dir') ; 
 colorbar
 
 fid = fopen('MeshSizeXdir.txt','w') ; 
@@ -45,16 +59,6 @@ end
 fclose(fid) ;
 
 %% MESH SIZE IN Y-DIR
-szy = dx + 0.35*(5-xg); 
-szy(szy < dx) = dx ; 
-szy(szy > 5*dx) = 5*dx; 
-
-figure;
-pcolor(xg,yg,szy); 
-shading interp
-title('Mesh size in y-dir') ; 
-colorbar
-
 fid = fopen('MeshSizeYdir.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ;
 for i = 1 : nrows
@@ -64,23 +68,28 @@ for i = 1 : nrows
     fprintf(fid,'\n') ;
 end
 fclose(fid) ;
-
 %% ANGLE OF ELONGATION (in radians) 
 fid = fopen('Angles.txt','w') ;
 fprintf(fid,'%d %d %f %f %f\n',nrows,ncols,dx,x0y0(1),x0y0(2)) ;
 
 angles = zeros(nrows,ncols) ;
-for i = 1 : ncols
-    for j = 1 : nrows
-        angles(j,i)  = atand(yg(j,i)/-xg(j,i)) ;
-        fprintf(fid,'%f ', 0*(pi/180.0)); %(angles(j,i))*(pi/180)); % sz(i,j)) ;
+
+for i = 1 : nrows
+    for j = 1 : ncols
+        angles(i,j)  = atand(yg(i,j)/-xg(i,j)) ;
+    end
+end
+angles(isnan(angles))=0.0; 
+for i = 1 : nrows
+    for j = 1 :  ncols
+        fprintf(fid,'%f ', 0*angles(i,j)*(pi/180.0)); %(angles(j,i))*(pi/180)); % sz(i,j)) ;
     end
     fprintf(fid,'\n') ;
 end
 fclose(fid) ;
 
-% figure;
-% pcolor(xg,yg,angles); 
-% shading interp
-% title('Mesh angles') ; 
-% colorbar
+figure;
+pcolor(xg,yg,angles); 
+shading interp
+title('Mesh angles') ; 
+colorbar

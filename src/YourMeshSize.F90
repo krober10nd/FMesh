@@ -341,10 +341,10 @@ B = SIN(MeshAngle)
 
 ! |A -B|
 ! |B  A|
-rot(1,1) = A
-rot(2,2) = A
-rot(1,2) =-B
-rot(2,1) = B
+rot(1,1) =  A
+rot(2,2) =  A
+rot(1,2) = -B
+rot(2,1) =  B
  
 rot_trans  = TRANSPOSE(Rot) 
 

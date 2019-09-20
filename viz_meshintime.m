@@ -2,7 +2,7 @@ close all; clc;
 
 t = []; p = []; 
 
-nscreen=5; maxiter=2000 ; 
+nscreen=5; maxiter=500 ; 
 
 figure; 
 for i = 5:5:maxiter
@@ -15,7 +15,8 @@ for i = 5:5:maxiter
     length(p)
     
     cla, triplot(t,p(:,1),p(:,2));
-    axis([1 5 1 5])
+    axis([-1 1 -1 1])
+    axis equal
     %axis([   -0.4888   -0.0931    0.3473    0.7430])
     title(['ITERATION=',num2str(i)]) ;
     pause(0.01)
