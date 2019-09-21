@@ -39,9 +39,9 @@ The program is run through the command line type (assuming you've named the file
 
 An example metric tensor is: 
 
-x,y span [-2 2]x[-2 2]
+x,y spans [-2 2]x[-2 2] <br /> 
 MeshSize1(x,y) = 0.005 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5);  
-MeshSize2(x,y) = 0.1*(x.^2 + y.^2).^0.5 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5); 
-Angle(x,y) = atan(x(x,y)/y(x,y)) + 90  ;
+MeshSize2(x,y) = 0.1*(x.^2 + y.^2).^0.5 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5); <br /> 
+Angle(x,y) = atan(x(x,y)/y(x,y)) + 90  ; <br /> 
 
 
