@@ -11,7 +11,6 @@ The software will need:
 ---------------------------------------
 1. GNU compiler (e.g., gfortran and gcc)
 2. Qhull (static re-entrant libraries)
-3. Python3+ (for visualization of mesh and for development of mesh size functions)
 
 To install the software:
 ---------------------------------------
@@ -22,7 +21,7 @@ To install the software:
 
 To use the software:
 ---------------------------------------
-It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boundary of the domain. 
+It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boundary of the domain in either ccw or cw order. 
 % The PSLG is a text file called "PSLG.txt" in the working directory in the following format: 
 
 5  2      ! # of points and dimension <br /> 
@@ -32,4 +31,17 @@ It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boun
 -1.0 -1.0 <br /> 
 -1.0  1.0 <br /> 
 <br /> 
-It requires the user define their own mesh size function in the module src/YourMeshSizeFunction.F90. The mesh size function takes a vector of coordinates and returns a desired element size and orientation (i.e., anisotropic) In the simplest case, you can simply write a function to return only a element size (isotropic). 
+It requires the user define their own mesh size function. These are rasters/structured grids than span the entire meshing domain with a minimum grid spacing at least twice as small as the minimum element size. Three grid files that are required are 1) the size of the mesh in the major axis of the circum-ellipses, 2) the size of the mesh in the minor axis of the circum-ellipses, and 3) the angle the major axis of the circum-ellipse makes with the x-axis (in radians). Please see MakeMeshSizes.m for more details in creating these files. 
+
+The program is run through the command line type (assuming you've named the files described above like below): 
+
+./distmesh.x PSLG.txt MeshSize1.txt MeshSize2.txt MeshAngle.txt 
+
+An example metric tensor is: 
+
+x,y spans [-2 2]x[-2 2] <br /> 
+MeshSize1(x,y) = 0.005 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5);  
+MeshSize2(x,y) = 0.1*(x.^2 + y.^2).^0.5 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5); <br /> 
+Angle(x,y) = atan(x(x,y)/y(x,y)) + 90  ; <br /> 
+
+
