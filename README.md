@@ -37,4 +37,11 @@ The program is run through the command line type (assuming you've named the file
 
 ./distmesh.x PSLG.txt MeshSize1.txt MeshSize2.txt MeshAngle.txt 
 
+An example metric tensor is: 
+
+x,y span [-2 2]x[-2 2]
+MeshSize1(x,y) = 0.005 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5);  
+MeshSize2(x,y) = 0.1*(x.^2 + y.^2).^0.5 + 1.5*abs(1-(x.^2  + y.^2 ).^0.5); 
+Angle(x,y) = atan(x(x,y)/y(x,y)) + 90  ;
+
 
