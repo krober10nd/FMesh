@@ -36,6 +36,6 @@ It requires the user define their own mesh size function. These are rasters/stru
 
 The program is run through the command line type (assuming you've named the files described above like below): 
 
-./distmesh.x PSLG.x MeshSize1.txt MeshSize2.txt MeshAngle.txt 
+./distmesh.x PSLG.txt MeshSize1.txt MeshSize2.txt MeshAngle.txt 
 
 
