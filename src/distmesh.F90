@@ -6,7 +6,7 @@
 PROGRAM DISTMESH 
 !-----------------------------------------------------------------------
 
-USE YourMeshSize 
+USE msizes 
 USE utils 
 USE vars 
 

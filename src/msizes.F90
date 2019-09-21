@@ -1,10 +1,10 @@
 !-----------------------------------------------------------------------
-!  MODULE YourMeshSize
+!  MODULE msizes
 !-----------------------------------------------------------------------
 !> @brief Sizing functions for meshes. 
 !>        These sizing functions are bilinear gridded interpolants. 
 !-----------------------------------------------------------------------
-MODULE YourMeshSize
+MODULE msizes
 !-----------------------------------------------------------------------
 
 USE vars 
@@ -127,8 +127,7 @@ IF(fileFound) THEN
   READ(1,*) SzFx%Ni,SzFx%Nj,SzFx%delta,SzFx%x0y0(1),SzFx%x0y0(2)
   WRITE(*,'(A)') "                                                        "
   WRITE(*,'(A)') "********************************************************"
-  WRITE(*,'(3A,I5,A,F12.8)') "INFO: Reading elongation1 file called ",fname(1:LenFN)," with " &  
-      //" ",SzFx%Ni*SzFx%Nj," points and grid spacing ",SzFx%delta
+  WRITE(*,'(2A)') "INFO: Reading angle file called ",fname(1:LenFN)
 
   ALLOCATE(SzFx%Vals(SzFx%Ni,SzFx%Nj))
   SzFx%Vals=-9999.d0 
@@ -184,8 +183,7 @@ IF(fileFound) THEN
   READ(1,*) SzFx%Ni,SzFx%Nj,SzFx%delta,SzFx%x0y0(1),SzFx%x0y0(2)
   WRITE(*,'(A)') "                                                        "
   WRITE(*,'(A)') "********************************************************"
-  WRITE(*,'(3A,I5,A,F12.8)') "INFO: Reading elongation2 file called ",fname(1:LenFN)," with " &  
-      //" ",SzFx%Ni*SzFx%Nj," points and grid spacing ",SzFx%delta
+  WRITE(*,'(2A)') "INFO: Reading angle file called ",fname(1:LenFN)
 
   ALLOCATE(SzFx%Vals(SzFx%Ni,SzFx%Nj))
   SzFx%Vals=-9999.d0 
@@ -241,8 +239,7 @@ IF(fileFound) THEN
   READ(1,*) SzFx%Ni,SzFx%Nj,SzFx%delta,SzFx%x0y0(1),SzFx%x0y0(2)
   WRITE(*,'(A)') "                                                        "
   WRITE(*,'(A)') "********************************************************"
-  WRITE(*,'(3A,I5,A,F12.8)') "INFO: Reading angle file called ",fname(1:LenFN)," with " &  
-      //" ",SzFx%Ni*SzFx%Nj," points and grid spacing ",SzFx%delta
+  WRITE(*,'(2A)') "INFO: Reading angle file called ",fname(1:LenFN)
 
   ALLOCATE(SzFx%Vals(SzFx%Ni,SzFx%Nj))
   SzFx%Vals=-9999.d0 
@@ -442,5 +439,5 @@ B(2,2) = +detinv * A(1,1)
 
 
 !-----------------------------------------------------------------------
-END MODULE YourMeshSize
+END MODULE msizes
 !-----------------------------------------------------------------------
