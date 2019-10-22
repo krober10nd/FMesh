@@ -1,5 +1,5 @@
 # FMesh
-A 2D/3D, an-/isotropic triangular/tetrahedral mesh generator based on the DistMesh algorithm in modern Fortran 
+A 2D/3D, an-/isotropic triangular mesh generator based on the DistMesh algorithm in modern Fortran 
 <br /> 
 <br /> 
 <br /> 
@@ -31,6 +31,9 @@ It requires a Planar Straight Line graph (in 2D) or PSLG that describes the boun
 -1.0 -1.0 <br /> 
 -1.0  1.0 <br /> 
 <br /> 
+
+Currently the domain has to be a singly-connected polygon (but it likely easy to modify to support mutliply-connected polygons).
+
 It requires the user define their own mesh size function. These are rasters/structured grids than span the entire meshing domain with a minimum grid spacing at least twice as small as the minimum element size. Three grid files that are required are 1) the size of the mesh in the major axis of the circum-ellipses, 2) the size of the mesh in the minor axis of the circum-ellipses, and 3) the angle the major axis of the circum-ellipse makes with the x-axis (in radians). Please see MakeMeshSizes.m for more details in creating these files. 
 
 The program is run through the command line type (assuming you've named the files described above like below): 
