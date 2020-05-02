@@ -3,7 +3,7 @@ A 2D/3D, an-/isotropic triangular mesh generator based on the DistMesh algorithm
 <br /> 
 <br /> 
 <br /> 
-(NOTE: this is a work in progress!).
+(NOTE: Development on this project has ceased, however, there are many potentially useful things to take from it). 
 =======================================
 
 
